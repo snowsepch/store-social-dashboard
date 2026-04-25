@@ -1,0 +1,750 @@
+<!DOCTYPE html>
+<html lang="zh-TW">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>右昌 Apple Shop — 社群數據儀表板</title>
+<script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js"></script>
+<style>
+  :root {
+    --apple-blue: #0071e3;
+    --apple-green: #34c759;
+    --apple-red: #ff3b30;
+    --apple-orange: #ff9500;
+    --apple-gray: #8e8e93;
+    --bg: #f5f5f7;
+    --card: #ffffff;
+    --text: #1d1d1f;
+    --sub: #6e6e73;
+    --line-green: #06c755;
+  }
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  body { font-family: -apple-system, BlinkMacSystemFont, "SF Pro Display", "Helvetica Neue", sans-serif; background: var(--bg); color: var(--text); }
+
+  /* HEADER */
+  header {
+    background: linear-gradient(135deg, #1c1c1e 0%, #2c2c2e 100%);
+    color: white; padding: 32px 24px 28px;
+    text-align: center;
+  }
+  header .store-badge {
+    display: inline-flex; align-items: center; gap: 10px;
+    background: rgba(255,255,255,0.1); border-radius: 20px;
+    padding: 6px 16px; margin-bottom: 16px; font-size: 13px; color: #aeaeb2;
+  }
+  header h1 { font-size: 28px; font-weight: 700; letter-spacing: -0.5px; }
+  header p { font-size: 14px; color: #aeaeb2; margin-top: 6px; }
+  .report-period {
+    display: inline-block; margin-top: 12px;
+    background: rgba(0,113,227,0.3); border: 1px solid rgba(0,113,227,0.5);
+    border-radius: 8px; padding: 4px 14px; font-size: 12px; color: #64b5f6;
+  }
+
+  /* NAV TABS */
+  .tab-nav {
+    display: flex; background: #1c1c1e; padding: 0 24px;
+    border-bottom: 1px solid #3a3a3c; overflow-x: auto; gap: 4px;
+  }
+  .tab-btn {
+    padding: 12px 20px; font-size: 14px; font-weight: 500;
+    color: #aeaeb2; border: none; background: none;
+    cursor: pointer; white-space: nowrap; border-bottom: 3px solid transparent;
+    transition: all 0.2s;
+  }
+  .tab-btn.active { color: white; border-bottom-color: var(--apple-blue); }
+  .tab-btn:hover { color: #e5e5ea; }
+
+  /* LAYOUT */
+  .container { max-width: 1100px; margin: 0 auto; padding: 24px 16px 48px; }
+  .section-title {
+    font-size: 22px; font-weight: 700; margin: 32px 0 16px;
+    display: flex; align-items: center; gap: 10px;
+  }
+  .section-title .badge {
+    font-size: 11px; font-weight: 600; padding: 3px 10px; border-radius: 20px;
+  }
+  .badge-line { background: #d4f5e2; color: #1a7a3e; }
+  .badge-google { background: #d2e3fc; color: #1557b0; }
+  .badge-alert { background: #fce8e6; color: #c5221f; }
+  .badge-tip { background: #fef9e0; color: #8a6100; }
+
+  /* GRID */
+  .grid-4 { display: grid; grid-template-columns: repeat(4, 1fr); gap: 14px; }
+  .grid-3 { display: grid; grid-template-columns: repeat(3, 1fr); gap: 14px; }
+  .grid-2 { display: grid; grid-template-columns: repeat(2, 1fr); gap: 14px; }
+  @media(max-width: 768px) {
+    .grid-4 { grid-template-columns: repeat(2, 1fr); }
+    .grid-3 { grid-template-columns: repeat(1, 1fr); }
+    .grid-2 { grid-template-columns: repeat(1, 1fr); }
+  }
+
+  /* CARD */
+  .card {
+    background: var(--card); border-radius: 16px;
+    padding: 20px; box-shadow: 0 2px 8px rgba(0,0,0,0.06);
+  }
+  .card-title { font-size: 13px; color: var(--sub); font-weight: 500; margin-bottom: 8px; }
+  .card-value { font-size: 32px; font-weight: 700; line-height: 1.1; }
+  .card-value.sm { font-size: 24px; }
+  .card-delta {
+    display: inline-flex; align-items: center; gap: 4px;
+    font-size: 13px; font-weight: 600; margin-top: 6px;
+    padding: 3px 8px; border-radius: 20px;
+  }
+  .delta-up { background: #d4f5e2; color: #1a7a3e; }
+  .delta-down { background: #fce8e6; color: #c5221f; }
+  .delta-warn { background: #fef9e0; color: #8a6100; }
+
+  /* PROGRESS BAR */
+  .progress-wrap { margin-top: 12px; }
+  .progress-label { display: flex; justify-content: space-between; font-size: 12px; color: var(--sub); margin-bottom: 5px; }
+  .progress-track { background: #e5e5ea; border-radius: 99px; height: 8px; overflow: hidden; }
+  .progress-fill { height: 100%; border-radius: 99px; transition: width 1s ease; }
+  .fill-green { background: var(--apple-green); }
+  .fill-red { background: var(--apple-red); }
+  .fill-blue { background: var(--apple-blue); }
+  .fill-orange { background: var(--apple-orange); }
+
+  /* CHART CARD */
+  .chart-card {
+    background: var(--card); border-radius: 16px;
+    padding: 20px; box-shadow: 0 2px 8px rgba(0,0,0,0.06);
+  }
+  .chart-card h3 { font-size: 15px; font-weight: 600; margin-bottom: 16px; }
+  .chart-wrap { position: relative; }
+
+  /* BROADCAST TABLE */
+  .broadcast-item {
+    display: flex; align-items: flex-start; gap: 14px;
+    padding: 14px 0; border-bottom: 1px solid #f0f0f0;
+  }
+  .broadcast-item:last-child { border-bottom: none; }
+  .bc-icon { width: 44px; height: 44px; border-radius: 10px; background: #e5e5ea; flex-shrink: 0; display: flex; align-items: center; justify-content: center; font-size: 20px; }
+  .bc-title { font-size: 14px; font-weight: 600; margin-bottom: 4px; }
+  .bc-date { font-size: 11px; color: var(--sub); margin-bottom: 8px; }
+  .bc-stats { display: flex; gap: 20px; }
+  .bc-stat { }
+  .bc-stat-label { font-size: 10px; color: var(--sub); }
+  .bc-stat-value { font-size: 16px; font-weight: 700; }
+  .open-rate-bar { margin-top: 6px; height: 6px; background: #e5e5ea; border-radius: 99px; overflow: hidden; }
+  .open-rate-fill { height: 100%; border-radius: 99px; }
+
+  /* RICH MENU */
+  .rich-menu-grid {
+    display: grid; grid-template-columns: repeat(3, 1fr); gap: 10px; margin-top: 12px;
+  }
+  .rm-item {
+    background: #f5f5f7; border-radius: 12px; padding: 12px 10px; text-align: center;
+  }
+  .rm-item .rm-key { font-size: 18px; font-weight: 800; color: var(--apple-blue); }
+  .rm-item .rm-label { font-size: 11px; color: var(--sub); margin-top: 2px; }
+
+  /* RECOMMENDATION */
+  .rec-card {
+    border-radius: 16px; padding: 20px 22px; margin-bottom: 14px;
+    border-left: 5px solid;
+  }
+  .rec-critical { background: #fef0f0; border-color: var(--apple-red); }
+  .rec-warning  { background: #fffbe6; border-color: var(--apple-orange); }
+  .rec-positive { background: #f0faf5; border-color: var(--apple-green); }
+  .rec-action   { background: #f0f5ff; border-color: var(--apple-blue); }
+  .rec-tag { font-size: 11px; font-weight: 700; letter-spacing: 0.5px; text-transform: uppercase; margin-bottom: 6px; }
+  .rec-title { font-size: 16px; font-weight: 700; margin-bottom: 6px; }
+  .rec-body { font-size: 14px; line-height: 1.7; color: #3a3a3c; }
+  .rec-body ul { padding-left: 18px; margin-top: 6px; }
+  .rec-body li { margin-bottom: 4px; }
+
+  /* TABS CONTENT */
+  .tab-content { display: none; }
+  .tab-content.active { display: block; }
+
+  /* GOOGLE METRICS */
+  .google-metric-big {
+    text-align: center; padding: 24px;
+  }
+  .google-metric-big .gm-value { font-size: 42px; font-weight: 800; color: var(--apple-blue); }
+  .google-metric-big .gm-label { font-size: 14px; color: var(--sub); margin-top: 4px; }
+
+  /* SCORE RING */
+  .score-ring-wrap { display: flex; align-items: center; gap: 20px; }
+  .score-ring { position: relative; width: 80px; height: 80px; }
+  .score-ring svg { transform: rotate(-90deg); }
+  .score-ring .score-text {
+    position: absolute; top: 50%; left: 50%;
+    transform: translate(-50%, -50%);
+    font-size: 18px; font-weight: 800; color: var(--apple-blue);
+  }
+
+  .tag-list { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 10px; }
+  .tag {
+    background: #e5e5ea; border-radius: 20px; padding: 4px 12px;
+    font-size: 12px; font-weight: 500; color: #3a3a3c;
+  }
+  .tag.blue { background: #d2e3fc; color: #1557b0; }
+
+  footer { text-align: center; padding: 24px; font-size: 12px; color: var(--sub); }
+</style>
+</head>
+<body>
+
+<header>
+  <div class="store-badge">🍎 Apple Shop 高雄右昌蘋果店</div>
+  <h1>社群 &amp; 商家 數據儀表板</h1>
+  <p>811 高雄市楠梓區德民路 836 號 2 樓 ｜ (07) 364-3207</p>
+  <div class="report-period">數據期間：2025年11月 – 2026年4月25日</div>
+</header>
+
+<nav class="tab-nav">
+  <button class="tab-btn active" onclick="switchTab('line')">📊 LINE@ 總覽</button>
+  <button class="tab-btn" onclick="switchTab('google')">🔍 Google 商家</button>
+  <button class="tab-btn" onclick="switchTab('broadcast')">📨 群發成效</button>
+  <button class="tab-btn" onclick="switchTab('recommend')">💡 建議 &amp; 行動</button>
+</nav>
+
+<!-- ===================== LINE@ 總覽 ===================== -->
+<div id="tab-line" class="tab-content active">
+<div class="container">
+
+  <div class="section-title">好友數據 <span class="badge badge-line">30天 / 2026.03.26–04.24</span></div>
+  <div class="grid-4">
+    <div class="card">
+      <div class="card-title">加入好友（總計）</div>
+      <div class="card-value">1,951</div>
+      <span class="card-delta delta-up">▲ +312 vs 上期</span>
+    </div>
+    <div class="card">
+      <div class="card-title">目標好友數（有效）</div>
+      <div class="card-value">1,246</div>
+      <span class="card-delta delta-up">▲ +215</span>
+      <div class="progress-wrap">
+        <div class="progress-label"><span>有效率</span><span>63.9%</span></div>
+        <div class="progress-track"><div class="progress-fill fill-green" style="width:63.9%"></div></div>
+      </div>
+    </div>
+    <div class="card">
+      <div class="card-title">封鎖人數</div>
+      <div class="card-value" style="color:var(--apple-red)">595</div>
+      <span class="card-delta delta-warn">▲ +95 需關注</span>
+      <div class="progress-wrap">
+        <div class="progress-label"><span>封鎖率</span><span>30.5%</span></div>
+        <div class="progress-track"><div class="progress-fill fill-red" style="width:30.5%"></div></div>
+      </div>
+    </div>
+    <div class="card">
+      <div class="card-title">本週新加入</div>
+      <div class="card-value">12</div>
+      <span class="card-delta delta-up">▲ 網址/QR碼 100%</span>
+      <div style="font-size:12px; color:var(--sub); margin-top:8px;">封鎖 1 人（本週）</div>
+    </div>
+  </div>
+
+  <div class="section-title">受眾屬性</div>
+  <div class="grid-2">
+    <div class="chart-card">
+      <h3>性別分布</h3>
+      <div class="chart-wrap" style="height:220px">
+        <canvas id="chartGender"></canvas>
+      </div>
+    </div>
+    <div class="chart-card">
+      <h3>年齡 / 性別分布</h3>
+      <div class="chart-wrap" style="height:220px">
+        <canvas id="chartAge"></canvas>
+      </div>
+    </div>
+  </div>
+
+  <div class="section-title">地區分布</div>
+  <div class="chart-card">
+    <h3>好友所在地區</h3>
+    <div class="chart-wrap" style="height:220px">
+      <canvas id="chartRegion"></canvas>
+    </div>
+  </div>
+
+  <div class="section-title">訊息用量 <span class="badge badge-line">2026/04/01–04/24</span></div>
+  <div class="grid-2">
+    <div class="card">
+      <div class="card-title">免費訊息則數</div>
+      <div class="card-value sm">3,708 <span style="font-size:16px;color:var(--sub)">/ 6,000</span></div>
+      <div class="progress-wrap">
+        <div class="progress-label"><span>使用率</span><span>61.8%</span></div>
+        <div class="progress-track"><div class="progress-fill fill-green" style="width:61.8%"></div></div>
+      </div>
+      <div style="font-size:12px; color:var(--sub); margin-top:10px;">剩餘 2,292 則 ｜ 約 6 天可用完（依目前發送量）</div>
+    </div>
+    <div class="card">
+      <div class="card-title">加購訊息</div>
+      <div class="card-value sm" style="color:var(--sub)">0 <span style="font-size:16px">/ 0</span></div>
+      <div style="font-size:13px; color:var(--sub); margin-top:10px; line-height:1.6">
+        目前未使用加購方案。<br>
+        若好友數持續成長，建議評估升級訊息方案。
+      </div>
+    </div>
+  </div>
+
+  <div class="section-title">圖文選單成效 <span class="badge badge-line">03/25–04/23</span></div>
+  <div class="grid-3">
+    <div class="card">
+      <div class="card-title">曝光用戶</div>
+      <div class="card-value">638</div>
+    </div>
+    <div class="card">
+      <div class="card-title">點擊用戶</div>
+      <div class="card-value">81</div>
+    </div>
+    <div class="card">
+      <div class="card-title">點擊率 CTR</div>
+      <div class="card-value" style="color:var(--apple-blue)">12.7%</div>
+    </div>
+  </div>
+  <div class="chart-card" style="margin-top:14px">
+    <h3>圖文選單各功能（選項說明）</h3>
+    <div class="rich-menu-grid">
+      <div class="rm-item"><div class="rm-key">A</div><div class="rm-label">Why Mac</div></div>
+      <div class="rm-item"><div class="rm-key">B</div><div class="rm-label">檔期優惠</div></div>
+      <div class="rm-item"><div class="rm-key">C</div><div class="rm-label">蘋果小教室</div></div>
+      <div class="rm-item"><div class="rm-key">D</div><div class="rm-label">教育價</div></div>
+      <div class="rm-item"><div class="rm-key">E</div><div class="rm-label">新品上市</div></div>
+      <div class="rm-item"><div class="rm-key">F</div><div class="rm-label">舊換新諮詢</div></div>
+    </div>
+    <div style="margin-top:14px; font-size:13px; color:var(--sub)">
+      📌 4月9日前後出現明顯曝光高峰（達 ~400次），對應 MacBook Air M5 / iPad 相關發文節點。
+    </div>
+  </div>
+
+</div>
+</div>
+
+<!-- ===================== Google 商家 ===================== -->
+<div id="tab-google" class="tab-content">
+<div class="container">
+
+  <div class="section-title">商家總覽 <span class="badge badge-google">2025/11 – 2026/04</span></div>
+
+  <div class="card" style="margin-bottom:14px">
+    <div style="display:flex; align-items:center; justify-content:space-between; flex-wrap:wrap; gap:16px;">
+      <div>
+        <div style="font-size:13px; color:var(--sub); margin-bottom:4px">商家名稱</div>
+        <div style="font-size:15px; font-weight:600; line-height:1.5">
+          Apple Shop 🍎 高雄右昌蘋果店（BTS教育價）<br>
+          <span style="font-size:12px; color:var(--sub); font-weight:400">Apple原廠授權專賣店 ｜ 楠梓蘋果</span>
+        </div>
+        <div class="tag-list">
+          <span class="tag blue">MacBook Air M5</span><span class="tag blue">iPad Air M4</span>
+          <span class="tag blue">教育價</span><span class="tag blue">舊換新</span>
+          <span class="tag blue">iPhone 17</span><span class="tag blue">Apple Watch</span><span class="tag blue">AirPods</span>
+        </div>
+      </div>
+      <div class="score-ring-wrap">
+        <div>
+          <div style="font-size:12px;color:var(--sub);margin-bottom:4px">商家檔案優異度</div>
+          <div class="score-ring">
+            <svg width="80" height="80" viewBox="0 0 80 80">
+              <circle cx="40" cy="40" r="34" fill="none" stroke="#e5e5ea" stroke-width="8"/>
+              <circle cx="40" cy="40" r="34" fill="none" stroke="#0071e3" stroke-width="8"
+                stroke-dasharray="213.6" stroke-dashoffset="85.4" stroke-linecap="round"/>
+            </svg>
+            <div class="score-text">60%</div>
+          </div>
+          <div style="font-size:11px;color:var(--apple-orange);margin-top:4px;text-align:center">仍有提升空間</div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <div class="grid-4">
+    <div class="card google-metric-big">
+      <div class="gm-value">6.3萬</div>
+      <div class="gm-label">瀏覽次數</div>
+    </div>
+    <div class="card google-metric-big">
+      <div class="gm-value" style="color:var(--apple-green)">1,500</div>
+      <div class="gm-label">互動次數</div>
+    </div>
+    <div class="card google-metric-big">
+      <div class="gm-value" style="color:var(--apple-orange)">3.9萬</div>
+      <div class="gm-label">搜尋曝光</div>
+    </div>
+    <div class="card google-metric-big">
+      <div class="gm-value" style="color:var(--sub)">2.37%</div>
+      <div class="gm-label">互動轉換率</div>
+    </div>
+  </div>
+
+  <div class="section-title">互動細項（月趨勢）</div>
+  <div class="grid-2">
+    <div class="chart-card">
+      <h3>來電次數（總計 514）</h3>
+      <div class="chart-wrap" style="height:220px">
+        <canvas id="chartCalls"></canvas>
+      </div>
+    </div>
+    <div class="chart-card">
+      <h3>路線查詢（總計 813）</h3>
+      <div class="chart-wrap" style="height:220px">
+        <canvas id="chartDirections"></canvas>
+      </div>
+    </div>
+  </div>
+  <div class="grid-2" style="margin-top:14px">
+    <div class="chart-card">
+      <h3>網站點擊（總計 173）</h3>
+      <div class="chart-wrap" style="height:220px">
+        <canvas id="chartWebsite"></canvas>
+      </div>
+    </div>
+    <div class="chart-card">
+      <h3>各互動類型佔比</h3>
+      <div class="chart-wrap" style="height:220px">
+        <canvas id="chartInteractionPie"></canvas>
+      </div>
+    </div>
+  </div>
+
+</div>
+</div>
+
+<!-- ===================== 群發成效 ===================== -->
+<div id="tab-broadcast" class="tab-content">
+<div class="container">
+
+  <div class="section-title">群發訊息成效 <span class="badge badge-line">2026/03/26–04/24</span></div>
+
+  <div class="chart-card" style="margin-bottom:20px">
+    <h3>開封率比較</h3>
+    <div class="chart-wrap" style="height:240px">
+      <canvas id="chartOpenRate"></canvas>
+    </div>
+  </div>
+
+  <div class="card">
+    <div class="broadcast-item">
+      <div class="bc-icon">📣</div>
+      <div style="flex:1">
+        <div class="bc-title">MacBook Air M5 / Neo 4/13 開始預購！</div>
+        <div class="bc-date">2026/04/12 17:39 ｜ 來店預購成功，保證首批拿到貨</div>
+        <div class="bc-stats">
+          <div class="bc-stat"><div class="bc-stat-label">傳訊</div><div class="bc-stat-value">1,237</div></div>
+          <div class="bc-stat"><div class="bc-stat-label">已開封</div><div class="bc-stat-value">438</div></div>
+          <div class="bc-stat"><div class="bc-stat-label">開封率</div><div class="bc-stat-value" style="color:var(--apple-green)">35.4%</div></div>
+        </div>
+        <div class="open-rate-bar" style="margin-top:8px">
+          <div class="open-rate-fill" style="width:35.4%; background:var(--apple-green); height:100%; border-radius:99px"></div>
+        </div>
+      </div>
+    </div>
+    <div class="broadcast-item">
+      <div class="bc-icon">📱</div>
+      <div style="flex:1">
+        <div class="bc-title">iPad 小教室｜兩堂課完整學習</div>
+        <div class="bc-date">2026/04/11 11:31 ｜ 想把 iPad 用得更順、更厲害</div>
+        <div class="bc-stats">
+          <div class="bc-stat"><div class="bc-stat-label">傳訊</div><div class="bc-stat-value">1,236</div></div>
+          <div class="bc-stat"><div class="bc-stat-label">已開封</div><div class="bc-stat-value">409</div></div>
+          <div class="bc-stat"><div class="bc-stat-label">開封率</div><div class="bc-stat-value" style="color:var(--apple-blue)">33.1%</div></div>
+        </div>
+        <div class="open-rate-bar" style="margin-top:8px">
+          <div class="open-rate-fill" style="width:33.1%; background:var(--apple-blue); height:100%; border-radius:99px"></div>
+        </div>
+      </div>
+    </div>
+    <div class="broadcast-item">
+      <div class="bc-icon">🎉</div>
+      <div style="flex:1">
+        <div class="bc-title">【04/10–04/20 會員特典】多款 Apple 商品限時優惠</div>
+        <div class="bc-date">2026/04/10 15:57</div>
+        <div class="bc-stats">
+          <div class="bc-stat"><div class="bc-stat-label">傳訊</div><div class="bc-stat-value">1,235</div></div>
+          <div class="bc-stat"><div class="bc-stat-label">已開封</div><div class="bc-stat-value">214</div></div>
+          <div class="bc-stat"><div class="bc-stat-label">開封率</div><div class="bc-stat-value" style="color:var(--apple-orange)">17.3%</div></div>
+        </div>
+        <div class="open-rate-bar" style="margin-top:8px">
+          <div class="open-rate-fill" style="width:17.3%; background:var(--apple-orange); height:100%; border-radius:99px"></div>
+        </div>
+        <div style="font-size:12px; color:var(--apple-red); margin-top:6px">⚠️ 開封率偏低 — 純促銷訊息吸引力低，建議加入明確利益點</div>
+      </div>
+    </div>
+  </div>
+
+  <div class="section-title">群發洞察</div>
+  <div class="grid-3">
+    <div class="card">
+      <div class="card-title">平均開封率</div>
+      <div class="card-value" style="color:var(--apple-blue)">28.6%</div>
+      <div style="font-size:12px; color:var(--sub); margin-top:8px">業界 LINE@ 平均 ~25-30%<br>✅ 目前表現符合標準</div>
+    </div>
+    <div class="card">
+      <div class="card-title">最高開封率類型</div>
+      <div class="card-value sm" style="color:var(--apple-green)">新品資訊</div>
+      <div style="font-size:12px; color:var(--sub); margin-top:8px">MacBook M5 預購訊息<br>35.4% — 比促銷高 +18%</div>
+    </div>
+    <div class="card">
+      <div class="card-title">本月剩餘訊息額度</div>
+      <div class="card-value sm">2,292 則</div>
+      <div style="font-size:12px; color:var(--sub); margin-top:8px">已用 3,708 / 6,000<br>每次群發約 1,237 人</div>
+    </div>
+  </div>
+
+</div>
+</div>
+
+<!-- ===================== 建議 ===================== -->
+<div id="tab-recommend" class="tab-content">
+<div class="container">
+
+  <div class="section-title">問題警示 <span class="badge badge-alert">需立即處理</span></div>
+
+  <div class="rec-card rec-critical">
+    <div class="rec-tag" style="color:var(--apple-red)">🚨 高優先</div>
+    <div class="rec-title">封鎖率 30.5% — 偏高需改善</div>
+    <div class="rec-body">
+      共 595 人封鎖，本期新增 +95 人。封鎖率超過 30% 是警戒線，代表部分內容讓用戶感到被打擾。
+      <ul>
+        <li>純廣告型群發（如會員特典）開封率只有 17.3%，促使封鎖</li>
+        <li>建議每月群發不超過 8 次，且廣告：內容比例維持 3:7</li>
+        <li>加入「退出標籤」機制，讓不感興趣者能選擇類別而非直接封鎖</li>
+      </ul>
+    </div>
+  </div>
+
+  <div class="rec-card rec-critical">
+    <div class="rec-tag" style="color:var(--apple-red)">🚨 高優先</div>
+    <div class="rec-title">Google 商家檔案優異度僅 60% — 嚴重影響搜尋排名</div>
+    <div class="rec-body">
+      60% 的優異度表示還有大量未填資訊，直接影響在 Google 搜尋結果中的能見度。
+      <ul>
+        <li>立即補充：營業時間（每週更新）、服務項目清單、付款方式</li>
+        <li>每週新增 2–3 張門市照片（產品展示、門口、服務中）</li>
+        <li>回覆所有 Google 評論（包含舊評論），Google 會提升排名</li>
+        <li>目標：在 2 週內將優異度提升至 80%+</li>
+      </ul>
+    </div>
+  </div>
+
+  <div class="section-title" style="margin-top:24px">優化方向 <span class="badge badge-tip">建議執行</span></div>
+
+  <div class="rec-card rec-warning">
+    <div class="rec-tag" style="color:#8a6100">⚡ 中優先</div>
+    <div class="rec-title">互動轉換率僅 2.37% — 63,157 瀏覽卻只有 1,500 互動</div>
+    <div class="rec-body">
+      Google 上每 100 個看到你的人，只有 2.37 人採取行動（來電/路線/點擊）。
+      <ul>
+        <li>在 Google 商家貼文加入「立即致電」或「查看路線」的 CTA 按鈕</li>
+        <li>4月來電數下降至約 40 通，建議在 Line@ 主動推「預約到店」功能</li>
+        <li>路線查詢 813 次是潛在到店客，可搭配「到店禮」誘因轉換</li>
+      </ul>
+    </div>
+  </div>
+
+  <div class="rec-card rec-warning">
+    <div class="rec-tag" style="color:#8a6100">⚡ 中優先</div>
+    <div class="rec-title">商業簡介頁面瀏覽數為 0 — LINE@ 內頁完全無流量</div>
+    <div class="rec-body">
+      過去 7 天 LINE@ 商業簡介頁面瀏覽為 0，代表用戶沒有主動查看門市資訊。
+      <ul>
+        <li>在圖文選單加入「關於我們」連結到商業簡介頁</li>
+        <li>群發訊息中加入「看更多店內資訊」連結</li>
+        <li>確認商業簡介內容是否完整（地址、電話、服務說明）</li>
+      </ul>
+    </div>
+  </div>
+
+  <div class="section-title" style="margin-top:24px">成長策略 <span class="badge badge-line">可執行</span></div>
+
+  <div class="rec-card rec-action">
+    <div class="rec-tag" style="color:#1557b0">📈 好友成長</div>
+    <div class="rec-title">本週新增好友 12 人，100% 來自 QR碼 — 加速曝光管道</div>
+    <div class="rec-body">
+      QR 碼是唯一加入管道，需要實體接觸才能轉化。建議多元化加入方式：
+      <ul>
+        <li>在 Google 商家貼文加入 LINE@ QR 碼圖片</li>
+        <li>售後服務自動發送加入好友連結（維修/取貨時）</li>
+        <li>Instagram / Facebook 貼文加入 LINE@ 連結</li>
+        <li>目標：每週新增好友 25+ 人（目前 12 人/週）</li>
+      </ul>
+    </div>
+  </div>
+
+  <div class="rec-card rec-action">
+    <div class="rec-tag" style="color:#1557b0">📱 內容策略</div>
+    <div class="rec-title">教育型內容開封率 33%+ > 促銷型 17% — 調整內容比重</div>
+    <div class="rec-body">
+      數據顯示「iPad 小教室」和「MacBook 新品資訊」開封率比單純促銷高出近 2 倍。
+      <ul>
+        <li><strong>每月建議群發節奏：</strong></li>
+        <li>週一：教學/使用技巧（Apple 功能小教室）</li>
+        <li>週三：新品/限時優惠（附截止日與限量感）</li>
+        <li>週五：舊換新/以舊換新試算（個人化訴求）</li>
+        <li>促銷訊息加入「限 XX 名」或「截止時間」提升緊迫感</li>
+      </ul>
+    </div>
+  </div>
+
+  <div class="rec-card rec-positive">
+    <div class="rec-tag" style="color:#1a7a3e">✅ 優勢維持</div>
+    <div class="rec-title">高雄在地集中度 87.8% — 精準本地市場</div>
+    <div class="rec-body">
+      好友高度集中高雄在地，是門市型態的優勢，可進一步深化在地連結：
+      <ul>
+        <li>Google 商家貼文強調「高雄楠梓在地服務」、「快速到店取機」</li>
+        <li>舉辦在地限定活動（如：高雄獨家教育優惠日）</li>
+        <li>與鄰近商家合作引流（學校、補習班、公司行號教育方案）</li>
+      </ul>
+    </div>
+  </div>
+
+  <div class="section-title" style="margin-top:24px">30 天行動清單</div>
+  <div class="card">
+    <div style="font-size:14px; line-height:2">
+      <div style="display:grid; grid-template-columns: 24px 1fr; gap:8px; align-items:start; margin-bottom:8px">
+        <span>□</span><span><strong>第 1 週：</strong>補充 Google 商家資訊（營業時間、服務、付款方式），優異度提升至 80%</span>
+      </div>
+      <div style="display:grid; grid-template-columns: 24px 1fr; gap:8px; align-items:start; margin-bottom:8px">
+        <span>□</span><span><strong>第 1 週：</strong>回覆所有未回覆的 Google 評論</span>
+      </div>
+      <div style="display:grid; grid-template-columns: 24px 1fr; gap:8px; align-items:start; margin-bottom:8px">
+        <span>□</span><span><strong>第 2 週：</strong>LINE@ 圖文選單加入商業簡介頁連結</span>
+      </div>
+      <div style="display:grid; grid-template-columns: 24px 1fr; gap:8px; align-items:start; margin-bottom:8px">
+        <span>□</span><span><strong>第 2 週：</strong>規劃 5 月內容月曆（教學：促銷 = 7:3）</span>
+      </div>
+      <div style="display:grid; grid-template-columns: 24px 1fr; gap:8px; align-items:start; margin-bottom:8px">
+        <span>□</span><span><strong>第 3 週：</strong>在 Google 商家貼文加入 LINE@ QR 碼，交叉引流</span>
+      </div>
+      <div style="display:grid; grid-template-columns: 24px 1fr; gap:8px; align-items:start; margin-bottom:8px">
+        <span>□</span><span><strong>第 4 週：</strong>檢視封鎖率是否下降，調整群發頻率</span>
+      </div>
+      <div style="display:grid; grid-template-columns: 24px 1fr; gap:8px; align-items:start">
+        <span>□</span><span><strong>持續：</strong>每週上傳 2 張 Google 商家新照片（產品/現場）</span>
+      </div>
+    </div>
+  </div>
+
+</div>
+</div>
+
+<footer>右昌 Apple Shop 數據儀表板 ｜ 由 CC 生成 ｜ 數據截至 2026/04/25</footer>
+
+<script>
+// ── Tab 切換 ──
+function switchTab(id) {
+  document.querySelectorAll('.tab-content').forEach(el => el.classList.remove('active'));
+  document.querySelectorAll('.tab-btn').forEach(el => el.classList.remove('active'));
+  document.getElementById('tab-' + id).classList.add('active');
+  event.target.classList.add('active');
+  initCharts();
+}
+
+// ── Chart.js 共用設定 ──
+const font = { family: "-apple-system, BlinkMacSystemFont, 'SF Pro Display', sans-serif" };
+Chart.defaults.font.family = font.family;
+
+let chartsInit = false;
+function initCharts() {
+  if (chartsInit) return;
+  chartsInit = true;
+
+  // 性別
+  new Chart(document.getElementById('chartGender'), {
+    type: 'doughnut',
+    data: {
+      labels: ['女性', '男性', '不明'],
+      datasets: [{ data: [52, 46, 2], backgroundColor: ['#ff6b8a','#5ac8fa','#e5e5ea'], borderWidth: 0 }]
+    },
+    options: { responsive: true, maintainAspectRatio: false, plugins: { legend: { position: 'bottom' } } }
+  });
+
+  // 年齡
+  new Chart(document.getElementById('chartAge'), {
+    type: 'bar',
+    data: {
+      labels: ['0-14','20-24','30-34','40-44','50-54','60-64','70+'],
+      datasets: [
+        { label: '男性', data: [0,6,6,5,5,3,2], backgroundColor: '#5ac8fa' },
+        { label: '女性', data: [1,8,7,10,9,3,1], backgroundColor: '#ff6b8a' }
+      ]
+    },
+    options: {
+      responsive: true, maintainAspectRatio: false,
+      plugins: { legend: { position: 'bottom' } },
+      scales: { x: { stacked: true }, y: { stacked: true } }
+    }
+  });
+
+  // 地區
+  new Chart(document.getElementById('chartRegion'), {
+    type: 'bar',
+    data: {
+      labels: ['高雄市','不明','屏東縣','台中市','台北市','其他'],
+      datasets: [{ data: [87.8, 8.3, 2.0, 1.8, 0.0, 0.1], backgroundColor: ['#0071e3','#8e8e93','#5ac8fa','#ff9500','#e5e5ea','#e5e5ea'] }]
+    },
+    options: {
+      indexAxis: 'y', responsive: true, maintainAspectRatio: false,
+      plugins: { legend: { display: false } },
+      scales: { x: { max: 100, ticks: { callback: v => v + '%' } } }
+    }
+  });
+
+  // Google 來電
+  new Chart(document.getElementById('chartCalls'), {
+    type: 'line',
+    data: {
+      labels: ['11月','12月','1月','2月','3月','4月'],
+      datasets: [{ label: '來電', data: [120,85,80,105,110,14], borderColor: '#0071e3', backgroundColor: 'rgba(0,113,227,0.1)', fill: true, tension: 0.4, pointRadius: 4 }]
+    },
+    options: { responsive: true, maintainAspectRatio: false, plugins: { legend: { display: false } }, scales: { y: { beginAtZero: true } } }
+  });
+
+  // Google 路線
+  new Chart(document.getElementById('chartDirections'), {
+    type: 'line',
+    data: {
+      labels: ['11月','12月','1月','2月','3月','4月'],
+      datasets: [{ label: '路線查詢', data: [140,175,120,115,160,103], borderColor: '#34c759', backgroundColor: 'rgba(52,199,89,0.1)', fill: true, tension: 0.4, pointRadius: 4 }]
+    },
+    options: { responsive: true, maintainAspectRatio: false, plugins: { legend: { display: false } }, scales: { y: { beginAtZero: true } } }
+  });
+
+  // Google 網站
+  new Chart(document.getElementById('chartWebsite'), {
+    type: 'line',
+    data: {
+      labels: ['11月','12月','1月','2月','3月','4月'],
+      datasets: [{ label: '網站點擊', data: [38,38,25,24,43,5], borderColor: '#ff9500', backgroundColor: 'rgba(255,149,0,0.1)', fill: true, tension: 0.4, pointRadius: 4 }]
+    },
+    options: { responsive: true, maintainAspectRatio: false, plugins: { legend: { display: false } }, scales: { y: { beginAtZero: true } } }
+  });
+
+  // 互動佔比
+  new Chart(document.getElementById('chartInteractionPie'), {
+    type: 'doughnut',
+    data: {
+      labels: ['路線查詢 813','來電 514','網站點擊 173'],
+      datasets: [{ data: [813, 514, 173], backgroundColor: ['#34c759','#0071e3','#ff9500'], borderWidth: 0 }]
+    },
+    options: { responsive: true, maintainAspectRatio: false, plugins: { legend: { position: 'bottom' } } }
+  });
+
+  // 開封率
+  new Chart(document.getElementById('chartOpenRate'), {
+    type: 'bar',
+    data: {
+      labels: ['MacBook Air M5 預購', 'iPad 小教室', '會員特典促銷'],
+      datasets: [
+        { label: '開封率 %', data: [35.4, 33.1, 17.3], backgroundColor: ['#34c759','#0071e3','#ff9500'], borderRadius: 8, borderSkipped: false }
+      ]
+    },
+    options: {
+      responsive: true, maintainAspectRatio: false,
+      plugins: { legend: { display: false } },
+      scales: { y: { max: 50, ticks: { callback: v => v + '%' } } }
+    }
+  });
+}
+
+// 頁面載入時初始化 LINE@ tab 的圖表
+window.addEventListener('load', initCharts);
+</script>
+</body>
+</html>
