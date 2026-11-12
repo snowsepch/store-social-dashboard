@@ -4,7 +4,9 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>右昌 Apple Shop — 社群數據儀表板</title>
+<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 16 16'%3E%3Ccircle cx='8' cy='8' r='7' fill='%230071e3'/%3E%3C/svg%3E">
 <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js"></script>
 <style>
   :root {
     --apple-blue: #0071e3;
@@ -40,6 +42,55 @@
     border-radius: 8px; padding: 4px 14px; font-size: 12px; color: #64b5f6;
   }
 
+  .demo-banner {
+    display: none;
+    background: #fff4e5;
+    color: #8a6100;
+    text-align: center;
+    font-size: 14px;
+    font-weight: 700;
+    padding: 10px 16px;
+    letter-spacing: 0.2px;
+  }
+  body.is-demo .demo-banner { display: block; }
+
+  .data-bar {
+    background: #fff;
+    border-bottom: 1px solid #e5e5ea;
+    padding: 16px 24px;
+  }
+  .data-bar-inner {
+    max-width: 1100px;
+    margin: 0 auto;
+    display: flex;
+    justify-content: space-between;
+    gap: 16px;
+    align-items: center;
+    flex-wrap: wrap;
+  }
+  .data-status-title { font-size: 15px; font-weight: 700; }
+  .data-status-sub { font-size: 13px; color: var(--sub); margin-top: 4px; line-height: 1.6; max-width: 640px; }
+  .data-actions { display: flex; flex-wrap: wrap; gap: 8px; }
+  .data-actions button, .file-btn {
+    border: none;
+    border-radius: 999px;
+    padding: 8px 14px;
+    font-size: 13px;
+    font-weight: 600;
+    cursor: pointer;
+    font-family: inherit;
+    line-height: 1.2;
+  }
+  .btn-primary, .file-btn { background: var(--apple-blue); color: #fff; }
+  .btn-ghost { background: #e8e8ed; color: var(--text); }
+  .btn-demo { background: #fff4e5; color: #8a6100; }
+  .btn-danger { background: #fce8e6; color: #c5221f; }
+  .file-btn { position: relative; display: inline-flex; align-items: center; }
+  .file-btn input {
+    position: absolute; width: 1px; height: 1px; padding: 0; margin: -1px;
+    overflow: hidden; clip: rect(0 0 0 0); white-space: nowrap; border: 0;
+  }
+
   /* NAV TABS */
   .tab-nav {
     display: flex; background: #1c1c1e; padding: 0 24px;
@@ -50,6 +101,7 @@
     color: #aeaeb2; border: none; background: none;
     cursor: pointer; white-space: nowrap; border-bottom: 3px solid transparent;
     transition: all 0.2s;
+    font-family: inherit;
   }
   .tab-btn.active { color: white; border-bottom-color: var(--apple-blue); }
   .tab-btn:hover { color: #e5e5ea; }
@@ -72,10 +124,12 @@
   .grid-4 { display: grid; grid-template-columns: repeat(4, 1fr); gap: 14px; }
   .grid-3 { display: grid; grid-template-columns: repeat(3, 1fr); gap: 14px; }
   .grid-2 { display: grid; grid-template-columns: repeat(2, 1fr); gap: 14px; }
+  .grid-4, .grid-3, .grid-2, .card, .chart-card, .chart-wrap { min-width: 0; }
   @media(max-width: 768px) {
     .grid-4 { grid-template-columns: repeat(2, 1fr); }
     .grid-3 { grid-template-columns: repeat(1, 1fr); }
     .grid-2 { grid-template-columns: repeat(1, 1fr); }
+    .data-bar { padding: 14px 16px; }
   }
 
   /* CARD */
@@ -91,6 +145,7 @@
     font-size: 13px; font-weight: 600; margin-top: 6px;
     padding: 3px 8px; border-radius: 20px;
   }
+  .card-delta[hidden] { display: none; }
   .delta-up { background: #d4f5e2; color: #1a7a3e; }
   .delta-down { background: #fce8e6; color: #c5221f; }
   .delta-warn { background: #fef9e0; color: #8a6100; }
@@ -100,6 +155,12 @@
   .progress-label { display: flex; justify-content: space-between; font-size: 12px; color: var(--sub); margin-bottom: 5px; }
   .progress-track { background: #e5e5ea; border-radius: 99px; height: 8px; overflow: hidden; }
   .progress-fill { height: 100%; border-radius: 99px; transition: width 1s ease; }
+
+  .empty-panel h2 { font-size: 18px; margin-bottom: 8px; }
+  .empty-panel p, .empty-panel li { font-size: 14px; line-height: 1.7; color: #3a3a3c; }
+  .empty-panel ol { margin: 10px 0 10px 18px; }
+  body.is-loaded #empty-panel { display: none; }
+  .empty-inline { font-size: 14px; color: var(--sub); padding: 8px 0; line-height: 1.6; }
   .fill-green { background: var(--apple-green); }
   .fill-red { background: var(--apple-red); }
   .fill-blue { background: var(--apple-blue); }
@@ -111,7 +172,7 @@
     padding: 20px; box-shadow: 0 2px 8px rgba(0,0,0,0.06);
   }
   .chart-card h3 { font-size: 15px; font-weight: 600; margin-bottom: 16px; }
-  .chart-wrap { position: relative; }
+  .chart-wrap { position: relative; width: 100%; }
 
   /* BROADCAST TABLE */
   .broadcast-item {
@@ -122,12 +183,13 @@
   .bc-icon { width: 44px; height: 44px; border-radius: 10px; background: #e5e5ea; flex-shrink: 0; display: flex; align-items: center; justify-content: center; font-size: 20px; }
   .bc-title { font-size: 14px; font-weight: 600; margin-bottom: 4px; }
   .bc-date { font-size: 11px; color: var(--sub); margin-bottom: 8px; }
-  .bc-stats { display: flex; gap: 20px; }
-  .bc-stat { }
+  .bc-stats { display: flex; gap: 20px; flex-wrap: wrap; }
   .bc-stat-label { font-size: 10px; color: var(--sub); }
   .bc-stat-value { font-size: 16px; font-weight: 700; }
   .open-rate-bar { margin-top: 6px; height: 6px; background: #e5e5ea; border-radius: 99px; overflow: hidden; }
   .open-rate-fill { height: 100%; border-radius: 99px; }
+  .bc-warn { font-size: 12px; color: var(--apple-red); margin-top: 6px; }
+  #insight-best { font-size: 20px; line-height: 1.35; word-break: break-word; }
 
   /* RICH MENU */
   .rich-menu-grid {
@@ -182,6 +244,12 @@
   }
   .tag.blue { background: #d2e3fc; color: #1557b0; }
 
+  .check-row {
+    display: grid; grid-template-columns: 24px 1fr; gap: 8px;
+    align-items: start; margin-bottom: 8px; font-size: 14px; line-height: 1.7;
+  }
+  .check-row:last-child { margin-bottom: 0; }
+
   footer { text-align: center; padding: 24px; font-size: 12px; color: var(--sub); }
 </style>
 </head>
@@ -191,50 +259,83 @@
   <div class="store-badge">🍎 Apple Shop 高雄右昌蘋果店</div>
   <h1>社群 &amp; 商家 數據儀表板</h1>
   <p>811 高雄市楠梓區德民路 836 號 2 樓 ｜ (07) 364-3207</p>
-  <div class="report-period">數據期間：2025年11月 – 2026年4月25日</div>
+  <div class="report-period" id="report-period">數據期間：尚未載入</div>
 </header>
 
+<div class="demo-banner" id="demo-banner">這是假資料，只為了預覽版面。不是右昌門市的真實數字。</div>
+
+<div class="data-bar">
+  <div class="data-bar-inner">
+    <div>
+      <div class="data-status-title" id="data-status">尚未載入資料</div>
+      <p class="data-status-sub" id="data-status-sub">請下載空白範本，用 Excel 填好後上傳。數字只存在這台瀏覽器，不會送到伺服器。</p>
+    </div>
+    <div class="data-actions">
+      <button type="button" class="btn-primary" id="btn-template">下載空白範本</button>
+      <label class="file-btn">上傳 CSV / Excel
+        <input id="file-input" type="file" accept=".csv,.xlsx,.xls,text/csv,application/vnd.ms-excel,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet">
+      </label>
+      <button type="button" class="btn-demo" id="btn-demo">載入假資料示範</button>
+      <button type="button" class="btn-danger" id="btn-clear">清除資料</button>
+    </div>
+  </div>
+</div>
+
 <nav class="tab-nav">
-  <button class="tab-btn active" onclick="switchTab('line')">📊 LINE@ 總覽</button>
-  <button class="tab-btn" onclick="switchTab('google')">🔍 Google 商家</button>
-  <button class="tab-btn" onclick="switchTab('broadcast')">📨 群發成效</button>
-  <button class="tab-btn" onclick="switchTab('recommend')">💡 建議 &amp; 行動</button>
+  <button type="button" class="tab-btn active" data-tab="line">📊 LINE@ 總覽</button>
+  <button type="button" class="tab-btn" data-tab="google">🔍 Google 商家</button>
+  <button type="button" class="tab-btn" data-tab="broadcast">📨 群發成效</button>
+  <button type="button" class="tab-btn" data-tab="recommend">💡 建議 &amp; 行動</button>
 </nav>
+
+<section id="empty-panel" class="container" style="padding-bottom:0">
+  <div class="card empty-panel">
+    <h2>還沒有資料</h2>
+    <p>這個頁面不內建門市數字。請在自己的電腦填好範本再上傳，檔案不會離開這台瀏覽器。</p>
+    <ol>
+      <li>按「下載空白範本」。</li>
+      <li>用 Excel 打開。不要改「類型」和「代碼」，數字填數值欄，文字填備註。</li>
+      <li>回到這裡按「上傳 CSV / Excel」。</li>
+      <li>看完或換人使用，按「清除資料」。</li>
+    </ol>
+    <p>想先看圖表長什麼樣子，按「載入假資料示範」。那組數字是假的，畫面上方會標明。</p>
+  </div>
+</section>
 
 <!-- ===================== LINE@ 總覽 ===================== -->
 <div id="tab-line" class="tab-content active">
 <div class="container">
 
-  <div class="section-title">好友數據 <span class="badge badge-line">30天 / 2026.03.26–04.24</span></div>
+  <div class="section-title">好友數據 <span class="badge badge-line" id="badge-line">尚未載入</span></div>
   <div class="grid-4">
     <div class="card">
       <div class="card-title">加入好友（總計）</div>
-      <div class="card-value">1,951</div>
-      <span class="card-delta delta-up">▲ +312 vs 上期</span>
+      <div class="card-value" id="val-friends-total">—</div>
+      <span class="card-delta" id="delta-friends" hidden></span>
     </div>
     <div class="card">
       <div class="card-title">目標好友數（有效）</div>
-      <div class="card-value">1,246</div>
-      <span class="card-delta delta-up">▲ +215</span>
+      <div class="card-value" id="val-friends-effective">—</div>
+      <span class="card-delta" id="delta-effective" hidden></span>
       <div class="progress-wrap">
-        <div class="progress-label"><span>有效率</span><span>63.9%</span></div>
-        <div class="progress-track"><div class="progress-fill fill-green" style="width:63.9%"></div></div>
+        <div class="progress-label"><span>有效率</span><span id="eff-rate">—</span></div>
+        <div class="progress-track"><div class="progress-fill fill-green" id="eff-bar" style="width:0%"></div></div>
       </div>
     </div>
     <div class="card">
       <div class="card-title">封鎖人數</div>
-      <div class="card-value" style="color:var(--apple-red)">595</div>
-      <span class="card-delta delta-warn">▲ +95 需關注</span>
+      <div class="card-value" id="val-blocked">—</div>
+      <span class="card-delta" id="delta-blocked" hidden></span>
       <div class="progress-wrap">
-        <div class="progress-label"><span>封鎖率</span><span>30.5%</span></div>
-        <div class="progress-track"><div class="progress-fill fill-red" style="width:30.5%"></div></div>
+        <div class="progress-label"><span>封鎖率</span><span id="block-rate">—</span></div>
+        <div class="progress-track"><div class="progress-fill fill-red" id="block-bar" style="width:0%"></div></div>
       </div>
     </div>
     <div class="card">
       <div class="card-title">本週新加入</div>
-      <div class="card-value">12</div>
-      <span class="card-delta delta-up">▲ 網址/QR碼 100%</span>
-      <div style="font-size:12px; color:var(--sub); margin-top:8px;">封鎖 1 人（本週）</div>
+      <div class="card-value" id="val-weekly-new">—</div>
+      <div id="weekly-source" style="font-size:13px; font-weight:600; margin-top:6px;"></div>
+      <div id="weekly-blocked-note" style="font-size:12px; color:var(--sub); margin-top:8px;"></div>
     </div>
   </div>
 
@@ -262,40 +363,37 @@
     </div>
   </div>
 
-  <div class="section-title">訊息用量 <span class="badge badge-line">2026/04/01–04/24</span></div>
+  <div class="section-title">訊息用量 <span class="badge badge-line" id="badge-message">尚未載入</span></div>
   <div class="grid-2">
     <div class="card">
       <div class="card-title">免費訊息則數</div>
-      <div class="card-value sm">3,708 <span style="font-size:16px;color:var(--sub)">/ 6,000</span></div>
+      <div class="card-value sm" id="val-msg">—</div>
       <div class="progress-wrap">
-        <div class="progress-label"><span>使用率</span><span>61.8%</span></div>
-        <div class="progress-track"><div class="progress-fill fill-green" style="width:61.8%"></div></div>
+        <div class="progress-label"><span>使用率</span><span id="msg-rate">—</span></div>
+        <div class="progress-track"><div class="progress-fill fill-green" id="msg-bar" style="width:0%"></div></div>
       </div>
-      <div style="font-size:12px; color:var(--sub); margin-top:10px;">剩餘 2,292 則 ｜ 約 6 天可用完（依目前發送量）</div>
+      <div id="msg-foot" style="font-size:12px; color:var(--sub); margin-top:10px;"></div>
     </div>
     <div class="card">
       <div class="card-title">加購訊息</div>
-      <div class="card-value sm" style="color:var(--sub)">0 <span style="font-size:16px">/ 0</span></div>
-      <div style="font-size:13px; color:var(--sub); margin-top:10px; line-height:1.6">
-        目前未使用加購方案。<br>
-        若好友數持續成長，建議評估升級訊息方案。
-      </div>
+      <div class="card-value sm" id="val-addon" style="color:var(--sub)">—</div>
+      <div id="addon-note" style="font-size:13px; color:var(--sub); margin-top:10px; line-height:1.6">上傳後顯示是否有加購。</div>
     </div>
   </div>
 
-  <div class="section-title">圖文選單成效 <span class="badge badge-line">03/25–04/23</span></div>
+  <div class="section-title">圖文選單成效 <span class="badge badge-line" id="badge-richmenu">尚未載入</span></div>
   <div class="grid-3">
     <div class="card">
       <div class="card-title">曝光用戶</div>
-      <div class="card-value">638</div>
+      <div class="card-value" id="val-rm-impr">—</div>
     </div>
     <div class="card">
       <div class="card-title">點擊用戶</div>
-      <div class="card-value">81</div>
+      <div class="card-value" id="val-rm-clicks">—</div>
     </div>
     <div class="card">
       <div class="card-title">點擊率 CTR</div>
-      <div class="card-value" style="color:var(--apple-blue)">12.7%</div>
+      <div class="card-value" id="val-rm-ctr">—</div>
     </div>
   </div>
   <div class="chart-card" style="margin-top:14px">
@@ -308,9 +406,7 @@
       <div class="rm-item"><div class="rm-key">E</div><div class="rm-label">新品上市</div></div>
       <div class="rm-item"><div class="rm-key">F</div><div class="rm-label">舊換新諮詢</div></div>
     </div>
-    <div style="margin-top:14px; font-size:13px; color:var(--sub)">
-      📌 4月9日前後出現明顯曝光高峰（達 ~400次），對應 MacBook Air M5 / iPad 相關發文節點。
-    </div>
+    <div id="richmenu-note" style="margin-top:14px; font-size:13px; color:var(--sub)"></div>
   </div>
 
 </div>
@@ -320,7 +416,7 @@
 <div id="tab-google" class="tab-content">
 <div class="container">
 
-  <div class="section-title">商家總覽 <span class="badge badge-google">2025/11 – 2026/04</span></div>
+  <div class="section-title">商家總覽 <span class="badge badge-google" id="badge-google">尚未載入</span></div>
 
   <div class="card" style="margin-bottom:14px">
     <div style="display:flex; align-items:center; justify-content:space-between; flex-wrap:wrap; gap:16px;">
@@ -342,12 +438,11 @@
           <div class="score-ring">
             <svg width="80" height="80" viewBox="0 0 80 80">
               <circle cx="40" cy="40" r="34" fill="none" stroke="#e5e5ea" stroke-width="8"/>
-              <circle cx="40" cy="40" r="34" fill="none" stroke="#0071e3" stroke-width="8"
-                stroke-dasharray="213.6" stroke-dashoffset="85.4" stroke-linecap="round"/>
+              <circle id="score-arc" cx="40" cy="40" r="34" fill="none" stroke="#0071e3" stroke-width="8" stroke-linecap="round" stroke-dasharray="213.63" stroke-dashoffset="213.63"/>
             </svg>
-            <div class="score-text">60%</div>
+            <div class="score-text" id="score-text">—</div>
           </div>
-          <div style="font-size:11px;color:var(--apple-orange);margin-top:4px;text-align:center">仍有提升空間</div>
+          <div id="score-hint" style="font-size:11px;color:var(--sub);margin-top:4px;text-align:center">上傳後顯示</div>
         </div>
       </div>
     </div>
@@ -355,19 +450,19 @@
 
   <div class="grid-4">
     <div class="card google-metric-big">
-      <div class="gm-value">6.3萬</div>
+      <div class="gm-value" id="val-views">—</div>
       <div class="gm-label">瀏覽次數</div>
     </div>
     <div class="card google-metric-big">
-      <div class="gm-value" style="color:var(--apple-green)">1,500</div>
+      <div class="gm-value" id="val-interactions" style="color:var(--apple-green)">—</div>
       <div class="gm-label">互動次數</div>
     </div>
     <div class="card google-metric-big">
-      <div class="gm-value" style="color:var(--apple-orange)">3.9萬</div>
+      <div class="gm-value" id="val-searches" style="color:var(--apple-orange)">—</div>
       <div class="gm-label">搜尋曝光</div>
     </div>
     <div class="card google-metric-big">
-      <div class="gm-value" style="color:var(--sub)">2.37%</div>
+      <div class="gm-value" id="val-conversion" style="color:var(--sub)">—</div>
       <div class="gm-label">互動轉換率</div>
     </div>
   </div>
@@ -375,13 +470,13 @@
   <div class="section-title">互動細項（月趨勢）</div>
   <div class="grid-2">
     <div class="chart-card">
-      <h3>來電次數（總計 514）</h3>
+      <h3 id="title-calls">來電次數</h3>
       <div class="chart-wrap" style="height:220px">
         <canvas id="chartCalls"></canvas>
       </div>
     </div>
     <div class="chart-card">
-      <h3>路線查詢（總計 813）</h3>
+      <h3 id="title-directions">路線查詢</h3>
       <div class="chart-wrap" style="height:220px">
         <canvas id="chartDirections"></canvas>
       </div>
@@ -389,7 +484,7 @@
   </div>
   <div class="grid-2" style="margin-top:14px">
     <div class="chart-card">
-      <h3>網站點擊（總計 173）</h3>
+      <h3 id="title-website">網站點擊</h3>
       <div class="chart-wrap" style="height:220px">
         <canvas id="chartWebsite"></canvas>
       </div>
@@ -409,7 +504,7 @@
 <div id="tab-broadcast" class="tab-content">
 <div class="container">
 
-  <div class="section-title">群發訊息成效 <span class="badge badge-line">2026/03/26–04/24</span></div>
+  <div class="section-title">群發訊息成效 <span class="badge badge-line" id="badge-broadcast">尚未載入</span></div>
 
   <div class="chart-card" style="margin-bottom:20px">
     <h3>開封率比較</h3>
@@ -418,71 +513,24 @@
     </div>
   </div>
 
-  <div class="card">
-    <div class="broadcast-item">
-      <div class="bc-icon">📣</div>
-      <div style="flex:1">
-        <div class="bc-title">MacBook Air M5 / Neo 4/13 開始預購！</div>
-        <div class="bc-date">2026/04/12 17:39 ｜ 來店預購成功，保證首批拿到貨</div>
-        <div class="bc-stats">
-          <div class="bc-stat"><div class="bc-stat-label">傳訊</div><div class="bc-stat-value">1,237</div></div>
-          <div class="bc-stat"><div class="bc-stat-label">已開封</div><div class="bc-stat-value">438</div></div>
-          <div class="bc-stat"><div class="bc-stat-label">開封率</div><div class="bc-stat-value" style="color:var(--apple-green)">35.4%</div></div>
-        </div>
-        <div class="open-rate-bar" style="margin-top:8px">
-          <div class="open-rate-fill" style="width:35.4%; background:var(--apple-green); height:100%; border-radius:99px"></div>
-        </div>
-      </div>
-    </div>
-    <div class="broadcast-item">
-      <div class="bc-icon">📱</div>
-      <div style="flex:1">
-        <div class="bc-title">iPad 小教室｜兩堂課完整學習</div>
-        <div class="bc-date">2026/04/11 11:31 ｜ 想把 iPad 用得更順、更厲害</div>
-        <div class="bc-stats">
-          <div class="bc-stat"><div class="bc-stat-label">傳訊</div><div class="bc-stat-value">1,236</div></div>
-          <div class="bc-stat"><div class="bc-stat-label">已開封</div><div class="bc-stat-value">409</div></div>
-          <div class="bc-stat"><div class="bc-stat-label">開封率</div><div class="bc-stat-value" style="color:var(--apple-blue)">33.1%</div></div>
-        </div>
-        <div class="open-rate-bar" style="margin-top:8px">
-          <div class="open-rate-fill" style="width:33.1%; background:var(--apple-blue); height:100%; border-radius:99px"></div>
-        </div>
-      </div>
-    </div>
-    <div class="broadcast-item">
-      <div class="bc-icon">🎉</div>
-      <div style="flex:1">
-        <div class="bc-title">【04/10–04/20 會員特典】多款 Apple 商品限時優惠</div>
-        <div class="bc-date">2026/04/10 15:57</div>
-        <div class="bc-stats">
-          <div class="bc-stat"><div class="bc-stat-label">傳訊</div><div class="bc-stat-value">1,235</div></div>
-          <div class="bc-stat"><div class="bc-stat-label">已開封</div><div class="bc-stat-value">214</div></div>
-          <div class="bc-stat"><div class="bc-stat-label">開封率</div><div class="bc-stat-value" style="color:var(--apple-orange)">17.3%</div></div>
-        </div>
-        <div class="open-rate-bar" style="margin-top:8px">
-          <div class="open-rate-fill" style="width:17.3%; background:var(--apple-orange); height:100%; border-radius:99px"></div>
-        </div>
-        <div style="font-size:12px; color:var(--apple-red); margin-top:6px">⚠️ 開封率偏低 — 純促銷訊息吸引力低，建議加入明確利益點</div>
-      </div>
-    </div>
-  </div>
+  <div class="card" id="broadcast-list"></div>
 
   <div class="section-title">群發洞察</div>
   <div class="grid-3">
     <div class="card">
       <div class="card-title">平均開封率</div>
-      <div class="card-value" style="color:var(--apple-blue)">28.6%</div>
-      <div style="font-size:12px; color:var(--sub); margin-top:8px">業界 LINE@ 平均 ~25-30%<br>✅ 目前表現符合標準</div>
+      <div class="card-value" id="insight-avg" style="color:var(--apple-blue)">—</div>
+      <div id="insight-avg-note" style="font-size:12px; color:var(--sub); margin-top:8px;">上傳群發後計算</div>
     </div>
     <div class="card">
-      <div class="card-title">最高開封率類型</div>
-      <div class="card-value sm" style="color:var(--apple-green)">新品資訊</div>
-      <div style="font-size:12px; color:var(--sub); margin-top:8px">MacBook M5 預購訊息<br>35.4% — 比促銷高 +18%</div>
+      <div class="card-title">最高開封率</div>
+      <div class="card-value sm" id="insight-best" style="color:var(--apple-green)">—</div>
+      <div id="insight-best-note" style="font-size:12px; color:var(--sub); margin-top:8px;">上傳群發後比較</div>
     </div>
     <div class="card">
       <div class="card-title">本月剩餘訊息額度</div>
-      <div class="card-value sm">2,292 則</div>
-      <div style="font-size:12px; color:var(--sub); margin-top:8px">已用 3,708 / 6,000<br>每次群發約 1,237 人</div>
+      <div class="card-value sm" id="insight-remain">—</div>
+      <div id="insight-remain-note" style="font-size:12px; color:var(--sub); margin-top:8px;">上傳訊息用量後顯示</div>
     </div>
   </div>
 
@@ -493,258 +541,992 @@
 <div id="tab-recommend" class="tab-content">
 <div class="container">
 
-  <div class="section-title">問題警示 <span class="badge badge-alert">需立即處理</span></div>
-
-  <div class="rec-card rec-critical">
-    <div class="rec-tag" style="color:var(--apple-red)">🚨 高優先</div>
-    <div class="rec-title">封鎖率 30.5% — 偏高需改善</div>
-    <div class="rec-body">
-      共 595 人封鎖，本期新增 +95 人。封鎖率超過 30% 是警戒線，代表部分內容讓用戶感到被打擾。
-      <ul>
-        <li>純廣告型群發（如會員特典）開封率只有 17.3%，促使封鎖</li>
-        <li>建議每月群發不超過 8 次，且廣告：內容比例維持 3:7</li>
-        <li>加入「退出標籤」機制，讓不感興趣者能選擇類別而非直接封鎖</li>
-      </ul>
-    </div>
-  </div>
-
-  <div class="rec-card rec-critical">
-    <div class="rec-tag" style="color:var(--apple-red)">🚨 高優先</div>
-    <div class="rec-title">Google 商家檔案優異度僅 60% — 嚴重影響搜尋排名</div>
-    <div class="rec-body">
-      60% 的優異度表示還有大量未填資訊，直接影響在 Google 搜尋結果中的能見度。
-      <ul>
-        <li>立即補充：營業時間（每週更新）、服務項目清單、付款方式</li>
-        <li>每週新增 2–3 張門市照片（產品展示、門口、服務中）</li>
-        <li>回覆所有 Google 評論（包含舊評論），Google 會提升排名</li>
-        <li>目標：在 2 週內將優異度提升至 80%+</li>
-      </ul>
-    </div>
-  </div>
-
-  <div class="section-title" style="margin-top:24px">優化方向 <span class="badge badge-tip">建議執行</span></div>
-
-  <div class="rec-card rec-warning">
-    <div class="rec-tag" style="color:#8a6100">⚡ 中優先</div>
-    <div class="rec-title">互動轉換率僅 2.37% — 63,157 瀏覽卻只有 1,500 互動</div>
-    <div class="rec-body">
-      Google 上每 100 個看到你的人，只有 2.37 人採取行動（來電/路線/點擊）。
-      <ul>
-        <li>在 Google 商家貼文加入「立即致電」或「查看路線」的 CTA 按鈕</li>
-        <li>4月來電數下降至約 40 通，建議在 Line@ 主動推「預約到店」功能</li>
-        <li>路線查詢 813 次是潛在到店客，可搭配「到店禮」誘因轉換</li>
-      </ul>
-    </div>
-  </div>
-
-  <div class="rec-card rec-warning">
-    <div class="rec-tag" style="color:#8a6100">⚡ 中優先</div>
-    <div class="rec-title">商業簡介頁面瀏覽數為 0 — LINE@ 內頁完全無流量</div>
-    <div class="rec-body">
-      過去 7 天 LINE@ 商業簡介頁面瀏覽為 0，代表用戶沒有主動查看門市資訊。
-      <ul>
-        <li>在圖文選單加入「關於我們」連結到商業簡介頁</li>
-        <li>群發訊息中加入「看更多店內資訊」連結</li>
-        <li>確認商業簡介內容是否完整（地址、電話、服務說明）</li>
-      </ul>
-    </div>
-  </div>
-
-  <div class="section-title" style="margin-top:24px">成長策略 <span class="badge badge-line">可執行</span></div>
-
-  <div class="rec-card rec-action">
-    <div class="rec-tag" style="color:#1557b0">📈 好友成長</div>
-    <div class="rec-title">本週新增好友 12 人，100% 來自 QR碼 — 加速曝光管道</div>
-    <div class="rec-body">
-      QR 碼是唯一加入管道，需要實體接觸才能轉化。建議多元化加入方式：
-      <ul>
-        <li>在 Google 商家貼文加入 LINE@ QR 碼圖片</li>
-        <li>售後服務自動發送加入好友連結（維修/取貨時）</li>
-        <li>Instagram / Facebook 貼文加入 LINE@ 連結</li>
-        <li>目標：每週新增好友 25+ 人（目前 12 人/週）</li>
-      </ul>
-    </div>
-  </div>
-
-  <div class="rec-card rec-action">
-    <div class="rec-tag" style="color:#1557b0">📱 內容策略</div>
-    <div class="rec-title">教育型內容開封率 33%+ > 促銷型 17% — 調整內容比重</div>
-    <div class="rec-body">
-      數據顯示「iPad 小教室」和「MacBook 新品資訊」開封率比單純促銷高出近 2 倍。
-      <ul>
-        <li><strong>每月建議群發節奏：</strong></li>
-        <li>週一：教學/使用技巧（Apple 功能小教室）</li>
-        <li>週三：新品/限時優惠（附截止日與限量感）</li>
-        <li>週五：舊換新/以舊換新試算（個人化訴求）</li>
-        <li>促銷訊息加入「限 XX 名」或「截止時間」提升緊迫感</li>
-      </ul>
-    </div>
-  </div>
-
-  <div class="rec-card rec-positive">
-    <div class="rec-tag" style="color:#1a7a3e">✅ 優勢維持</div>
-    <div class="rec-title">高雄在地集中度 87.8% — 精準本地市場</div>
-    <div class="rec-body">
-      好友高度集中高雄在地，是門市型態的優勢，可進一步深化在地連結：
-      <ul>
-        <li>Google 商家貼文強調「高雄楠梓在地服務」、「快速到店取機」</li>
-        <li>舉辦在地限定活動（如：高雄獨家教育優惠日）</li>
-        <li>與鄰近商家合作引流（學校、補習班、公司行號教育方案）</li>
-      </ul>
-    </div>
-  </div>
+  <div class="section-title">依這份資料產生的建議 <span class="badge badge-alert">上傳後更新</span></div>
+  <div id="rec-mount"></div>
 
   <div class="section-title" style="margin-top:24px">30 天行動清單</div>
   <div class="card">
-    <div style="font-size:14px; line-height:2">
-      <div style="display:grid; grid-template-columns: 24px 1fr; gap:8px; align-items:start; margin-bottom:8px">
-        <span>□</span><span><strong>第 1 週：</strong>補充 Google 商家資訊（營業時間、服務、付款方式），優異度提升至 80%</span>
-      </div>
-      <div style="display:grid; grid-template-columns: 24px 1fr; gap:8px; align-items:start; margin-bottom:8px">
-        <span>□</span><span><strong>第 1 週：</strong>回覆所有未回覆的 Google 評論</span>
-      </div>
-      <div style="display:grid; grid-template-columns: 24px 1fr; gap:8px; align-items:start; margin-bottom:8px">
-        <span>□</span><span><strong>第 2 週：</strong>LINE@ 圖文選單加入商業簡介頁連結</span>
-      </div>
-      <div style="display:grid; grid-template-columns: 24px 1fr; gap:8px; align-items:start; margin-bottom:8px">
-        <span>□</span><span><strong>第 2 週：</strong>規劃 5 月內容月曆（教學：促銷 = 7:3）</span>
-      </div>
-      <div style="display:grid; grid-template-columns: 24px 1fr; gap:8px; align-items:start; margin-bottom:8px">
-        <span>□</span><span><strong>第 3 週：</strong>在 Google 商家貼文加入 LINE@ QR 碼，交叉引流</span>
-      </div>
-      <div style="display:grid; grid-template-columns: 24px 1fr; gap:8px; align-items:start; margin-bottom:8px">
-        <span>□</span><span><strong>第 4 週：</strong>檢視封鎖率是否下降，調整群發頻率</span>
-      </div>
-      <div style="display:grid; grid-template-columns: 24px 1fr; gap:8px; align-items:start">
-        <span>□</span><span><strong>持續：</strong>每週上傳 2 張 Google 商家新照片（產品/現場）</span>
-      </div>
-    </div>
+    <div class="check-row"><span>□</span><span><strong>第 1 週：</strong>補齊 Google 商家資訊（營業時間、服務項目、付款方式），把檔案優異度往上拉。</span></div>
+    <div class="check-row"><span>□</span><span><strong>第 1 週：</strong>回覆還沒回的 Google 評論。</span></div>
+    <div class="check-row"><span>□</span><span><strong>第 2 週：</strong>LINE@ 圖文選單加上商業簡介頁連結。</span></div>
+    <div class="check-row"><span>□</span><span><strong>第 2 週：</strong>排下個月內容，教學多於促銷。</span></div>
+    <div class="check-row"><span>□</span><span><strong>第 3 週：</strong>Google 商家貼文放上 LINE@ 加入方式，兩邊互相導流。</span></div>
+    <div class="check-row"><span>□</span><span><strong>第 4 週：</strong>看封鎖率有沒有下降，再調整群發頻率。</span></div>
+    <div class="check-row"><span>□</span><span><strong>持續：</strong>每週補幾張 Google 商家新照片（產品或現場）。</span></div>
   </div>
 
 </div>
 </div>
 
-<footer>右昌 Apple Shop 數據儀表板 ｜ 由 CC 生成 ｜ 數據截至 2026/04/25</footer>
+<footer>右昌 Apple Shop 數據儀表板 ｜ 資料只存在此瀏覽器 ｜ <span id="footer-asof">尚未載入</span></footer>
 
 <script>
-// ── Tab 切換 ──
-function switchTab(id) {
-  document.querySelectorAll('.tab-content').forEach(el => el.classList.remove('active'));
-  document.querySelectorAll('.tab-btn').forEach(el => el.classList.remove('active'));
-  document.getElementById('tab-' + id).classList.add('active');
-  event.target.classList.add('active');
-  initCharts();
+const STORAGE_KEY = 'youchang-dashboard-v1';
+
+const TEMPLATE_ROWS = [
+  ['類型', '代碼', '名稱', '數值1', '數值2', '數值3', '備註'],
+  ['說明', 'readme', '不要改「類型」和「代碼」。數字填數值欄，文字填備註。空白列會略過。', '', '', '', ''],
+  ['meta', 'period', '數據期間（寫在備註）', '', '', '', ''],
+  ['meta', 'as_of', '數據截至（寫在備註）', '', '', '', ''],
+  ['meta', 'line_badge', '好友區間標籤（寫在備註）', '', '', '', ''],
+  ['meta', 'message_badge', '訊息區間標籤（寫在備註）', '', '', '', ''],
+  ['meta', 'richmenu_badge', '圖文選單區間標籤（寫在備註）', '', '', '', ''],
+  ['meta', 'broadcast_badge', '群發區間標籤（寫在備註）', '', '', '', ''],
+  ['meta', 'google_badge', 'Google區間標籤（寫在備註）', '', '', '', ''],
+  ['meta', 'weekly_source', '本週加入來源說明（寫在備註）', '', '', '', ''],
+  ['meta', 'richmenu_note', '圖文選單補充說明（寫在備註）', '', '', '', ''],
+  ['line', 'friends_total', '加入好友（總計）', '', '', '', ''],
+  ['line', 'friends_delta', '好友較上期增減（正負整數）', '', '', '', ''],
+  ['line', 'friends_effective', '有效好友數', '', '', '', ''],
+  ['line', 'friends_effective_delta', '有效好友較上期增減（正負整數）', '', '', '', ''],
+  ['line', 'blocked', '封鎖人數', '', '', '', ''],
+  ['line', 'blocked_delta', '封鎖較上期增減（正負整數）', '', '', '', ''],
+  ['line', 'weekly_new', '本週新加入', '', '', '', ''],
+  ['line', 'weekly_blocked', '本週封鎖人數', '', '', '', ''],
+  ['message', 'used', '免費訊息已用則數', '', '', '', ''],
+  ['message', 'quota', '免費訊息額度', '', '', '', ''],
+  ['message', 'days_left', '依目前速度預估還能用幾天', '', '', '', ''],
+  ['message', 'addon_used', '加購訊息已用', '', '', '', ''],
+  ['message', 'addon_quota', '加購訊息額度', '', '', '', ''],
+  ['richmenu', 'impressions', '圖文選單曝光用戶', '', '', '', ''],
+  ['richmenu', 'clicks', '圖文選單點擊用戶', '', '', '', ''],
+  ['google', 'profile_score', '商家檔案優異度（0到100）', '', '', '', ''],
+  ['google', 'views', '瀏覽次數', '', '', '', ''],
+  ['google', 'interactions', '互動次數', '', '', '', ''],
+  ['google', 'searches', '搜尋曝光', '', '', '', ''],
+  ['google', 'profile_views', '近7天商業簡介瀏覽數', '', '', '', ''],
+  ['gender', 'g1', '女性', '', '', '', '數值1填人數或占比，同一張圖用同一種單位'],
+  ['gender', 'g2', '男性', '', '', '', ''],
+  ['gender', 'g3', '不明', '', '', '', ''],
+  ['age', 'a1', '年齡層1', '', '', '', '數值1=男性，數值2=女性。名稱改成實際年齡層'],
+  ['age', 'a2', '年齡層2', '', '', '', ''],
+  ['age', 'a3', '年齡層3', '', '', '', ''],
+  ['age', 'a4', '年齡層4', '', '', '', ''],
+  ['age', 'a5', '年齡層5', '', '', '', ''],
+  ['age', 'a6', '年齡層6', '', '', '', ''],
+  ['region', 'r1', '地區1', '', '', '', '數值1填占比或人數。名稱改成縣市'],
+  ['region', 'r2', '地區2', '', '', '', ''],
+  ['region', 'r3', '地區3', '', '', '', ''],
+  ['region', 'r4', '地區4', '', '', '', ''],
+  ['region', 'r5', '地區5', '', '', '', ''],
+  ['region', 'r6', '地區6', '', '', '', ''],
+  ['month', 'm1', '月份1', '', '', '', '數值1=來電，數值2=路線查詢，數值3=網站點擊。名稱改成月份'],
+  ['month', 'm2', '月份2', '', '', '', ''],
+  ['month', 'm3', '月份3', '', '', '', ''],
+  ['month', 'm4', '月份4', '', '', '', ''],
+  ['month', 'm5', '月份5', '', '', '', ''],
+  ['month', 'm6', '月份6', '', '', '', ''],
+  ['broadcast', 'b1', '', '', '', '', '名稱=群發標題，數值1=傳訊數，數值2=已開封，備註=日期或說明'],
+  ['broadcast', 'b2', '', '', '', '', ''],
+  ['broadcast', 'b3', '', '', '', '', ''],
+  ['broadcast', 'b4', '', '', '', '', '用不到的列留白'],
+  ['broadcast', 'b5', '', '', '', '', '']
+];
+
+const HELP_ROWS = [
+  ['右昌 Apple Shop 儀表板空白範本'],
+  ['1. 只在「資料」工作表填寫。'],
+  ['2. 不要改「類型」與「代碼」這兩欄。'],
+  ['3. 數字填在數值1、數值2、數值3。文字（期間、說明、標題）填在名稱或備註，依該列說明。'],
+  ['4. 年齡列：數值1是男性，數值2是女性。'],
+  ['5. 月份列：數值1是來電，數值2是路線查詢，數值3是網站點擊。'],
+  ['6. 群發列：名稱是標題，數值1是傳訊數，數值2是已開封，備註可寫日期。'],
+  ['7. 性別與地區請整張圖用同一種單位（都填人數，或都填占比）。'],
+  ['8. 存檔後回到網頁，按「上傳 CSV / Excel」。csv 與 xlsx 都可以。'],
+  ['9. 資料只寫進這台瀏覽器，不會上傳到伺服器。換電腦或按清除資料後要再傳一次。'],
+  ['10. 用不到的列留白即可。']
+];
+
+const DEMO = {
+  demo: true,
+  meta: {
+    period: '假資料｜不是真實期間',
+    as_of: '假資料',
+    line_badge: '假資料區間',
+    message_badge: '假資料區間',
+    richmenu_badge: '假資料區間',
+    broadcast_badge: '假資料區間',
+    google_badge: '假資料區間',
+    weekly_source: '假資料：示範來源',
+    richmenu_note: '這段文字是假的，用來預覽版面。'
+  },
+  line: {
+    friends_total: 1000,
+    friends_delta: 100,
+    friends_effective: 800,
+    friends_effective_delta: 80,
+    blocked: 350,
+    blocked_delta: 30,
+    weekly_new: 10,
+    weekly_blocked: 1
+  },
+  message: { used: 100, quota: 1000, days_left: 9, addon_used: 0, addon_quota: 0 },
+  richmenu: { impressions: 100, clicks: 10 },
+  google: { profile_score: 50, views: 10000, interactions: 100, searches: 5000, profile_views: 0 },
+  gender: [
+    { label: '女性', value: 50 },
+    { label: '男性', value: 40 },
+    { label: '不明', value: 10 }
+  ],
+  age: [
+    { label: '18-24', male: 10, female: 12 },
+    { label: '25-34', male: 20, female: 22 },
+    { label: '35-44', male: 15, female: 18 },
+    { label: '45+', male: 8, female: 9 }
+  ],
+  region: [
+    { label: '示範區A', value: 70 },
+    { label: '示範區B', value: 20 },
+    { label: '其他', value: 10 }
+  ],
+  months: [
+    { label: '1月', calls: 10, directions: 20, website: 5 },
+    { label: '2月', calls: 12, directions: 18, website: 6 },
+    { label: '3月', calls: 9, directions: 22, website: 4 },
+    { label: '4月', calls: 11, directions: 15, website: 7 }
+  ],
+  broadcasts: [
+    { title: '假資料｜新品通知', sent: 200, opened: 90, note: '示範用日期' },
+    { title: '假資料｜教學文章', sent: 200, opened: 40, note: '示範用日期' },
+    { title: '假資料｜促銷活動', sent: 200, opened: 20, note: '示範用日期' }
+  ]
+};
+
+const charts = {};
+
+function el(tag, attrs, children) {
+  const node = document.createElement(tag);
+  if (attrs) {
+    Object.entries(attrs).forEach(([key, value]) => {
+      if (value == null) return;
+      if (key === 'class') node.className = value;
+      else node.setAttribute(key, value);
+    });
+  }
+  (children || []).forEach(child => {
+    if (child == null) return;
+    node.append(child.nodeType ? child : document.createTextNode(String(child)));
+  });
+  return node;
 }
 
-// ── Chart.js 共用設定 ──
-const font = { family: "-apple-system, BlinkMacSystemFont, 'SF Pro Display', sans-serif" };
-Chart.defaults.font.family = font.family;
+function setText(id, text) {
+  const node = document.getElementById(id);
+  if (node) node.textContent = text == null ? '' : String(text);
+}
 
-let chartsInit = false;
-function initCharts() {
-  if (chartsInit) return;
-  chartsInit = true;
+function fmtInt(n) {
+  if (n == null || !Number.isFinite(Number(n))) return '—';
+  return Math.round(Number(n)).toLocaleString('zh-TW');
+}
 
-  // 性別
-  new Chart(document.getElementById('chartGender'), {
+function fmtSigned(n) {
+  const num = Number(n);
+  if (!Number.isFinite(num)) return '—';
+  if (num > 0) return '+' + fmtInt(num);
+  return fmtInt(num);
+}
+
+function fmtPct(n, digits) {
+  if (n == null || !Number.isFinite(Number(n))) return '—';
+  return Number(n).toFixed(digits == null ? 1 : digits) + '%';
+}
+
+function fmtWan(n) {
+  if (n == null || !Number.isFinite(Number(n))) return '—';
+  const num = Number(n);
+  if (Math.abs(num) >= 10000) {
+    const wan = Math.round((num / 10000) * 10) / 10;
+    return String(wan).replace(/\.0$/, '') + '萬';
+  }
+  return fmtInt(num);
+}
+
+function ratio(part, whole) {
+  if (part == null || whole == null || !Number(whole)) return null;
+  return (Number(part) / Number(whole)) * 100;
+}
+
+function setBar(id, pct) {
+  const node = document.getElementById(id);
+  if (!node) return;
+  const width = pct == null || !Number.isFinite(pct) ? 0 : Math.max(0, Math.min(100, pct));
+  node.style.width = width + '%';
+}
+
+function setDelta(id, n, opts) {
+  const node = document.getElementById(id);
+  if (!node) return;
+  const num = Number(n);
+  if (n == null || !Number.isFinite(num)) {
+    node.hidden = true;
+    node.textContent = '';
+    node.className = 'card-delta';
+    return;
+  }
+  const badUp = opts && opts.badUp;
+  const suffix = (opts && opts.suffix) || '';
+  let cls = 'delta-up';
+  if (badUp) cls = num > 0 ? 'delta-warn' : 'delta-up';
+  else if (num < 0) cls = 'delta-down';
+  else if (num === 0) cls = 'delta-warn';
+  const arrow = num > 0 ? '▲' : num < 0 ? '▼' : '–';
+  node.hidden = false;
+  node.className = 'card-delta ' + cls;
+  node.textContent = arrow + ' ' + fmtSigned(num) + suffix;
+}
+
+function parseNumber(raw) {
+  if (raw == null) return null;
+  let text = String(raw).trim();
+  if (!text) return null;
+  text = text.replace(/,/g, '').replace(/%/g, '').replace(/％/g, '').replace(/\s/g, '');
+  let mul = 1;
+  if (text.endsWith('萬')) {
+    mul = 10000;
+    text = text.slice(0, -1);
+  }
+  if (!text || text === '-' || text === '—' || text === '–') return null;
+  const n = Number(text);
+  if (!Number.isFinite(n)) return null;
+  return n * mul;
+}
+
+function readStore() {
+  try {
+    const raw = localStorage.getItem(STORAGE_KEY);
+    if (!raw) return null;
+    const data = JSON.parse(raw);
+    if (!data || typeof data !== 'object' || Array.isArray(data)) return null;
+    return data;
+  } catch (err) {
+    return null;
+  }
+}
+
+function saveStore(model) {
+  try {
+    localStorage.setItem(STORAGE_KEY, JSON.stringify(model));
+  } catch (err) {
+    throw new Error('這台瀏覽器存不下這份資料。');
+  }
+}
+
+function csvCell(value) {
+  const text = String(value ?? '');
+  if (/[",\r\n]/.test(text)) return '"' + text.replace(/"/g, '""') + '"';
+  return text;
+}
+
+function downloadBlob(blob, filename) {
+  const link = document.createElement('a');
+  link.href = URL.createObjectURL(blob);
+  link.download = filename;
+  document.body.appendChild(link);
+  link.click();
+  link.remove();
+  setTimeout(() => URL.revokeObjectURL(link.href), 1000);
+}
+
+function downloadTemplate() {
+  if (typeof XLSX !== 'undefined') {
+    const book = XLSX.utils.book_new();
+    const dataSheet = XLSX.utils.aoa_to_sheet(TEMPLATE_ROWS);
+    dataSheet['!cols'] = [
+      { wch: 12 }, { wch: 26 }, { wch: 42 }, { wch: 14 }, { wch: 14 }, { wch: 14 }, { wch: 46 }
+    ];
+    const helpSheet = XLSX.utils.aoa_to_sheet(HELP_ROWS);
+    helpSheet['!cols'] = [{ wch: 88 }];
+    XLSX.utils.book_append_sheet(book, dataSheet, '資料');
+    XLSX.utils.book_append_sheet(book, helpSheet, '說明');
+    XLSX.writeFile(book, '右昌儀表板-空白範本.xlsx');
+    return;
+  }
+  const csv = TEMPLATE_ROWS.map(row => row.map(csvCell).join(',')).join('\r\n');
+  downloadBlob(new Blob(['\uFEFF' + csv], { type: 'text/csv;charset=utf-8' }), '右昌儀表板-空白範本.csv');
+}
+
+function rowsToModel(rows) {
+  const model = {
+    demo: false,
+    meta: {},
+    line: {},
+    message: {},
+    richmenu: {},
+    google: {},
+    gender: [],
+    age: [],
+    region: [],
+    months: [],
+    broadcasts: []
+  };
+  const headerIdx = rows.findIndex(row => (row || []).some(cell => String(cell).trim() === '類型'));
+  if (headerIdx < 0) throw new Error('找不到「類型」欄。請用空白範本，不要改欄位名稱。');
+  const header = rows[headerIdx].map(cell => String(cell).trim());
+  const col = name => header.indexOf(name);
+  const iKind = col('類型');
+  const iName = col('名稱');
+  const i1 = col('數值1');
+  const i2 = col('數值2');
+  const i3 = col('數值3');
+  const iNote = col('備註');
+  const iCode = col('代碼');
+  if (iKind < 0 || i1 < 0) throw new Error('範本欄位不完整。請重新下載空白範本。');
+
+  const cell = (row, index) => index < 0 ? '' : String(row[index] ?? '').trim();
+
+  rows.slice(headerIdx + 1).forEach(row => {
+    if (!row) return;
+    const kind = cell(row, iKind);
+    if (!kind || kind === '說明' || kind.startsWith('#')) return;
+    const code = cell(row, iCode);
+    const name = cell(row, iName);
+    const n1 = parseNumber(cell(row, i1));
+    const n2 = parseNumber(cell(row, i2));
+    const n3 = parseNumber(cell(row, i3));
+    const note = cell(row, iNote);
+
+    if (kind === 'meta') {
+      if (note) model.meta[code] = note;
+      return;
+    }
+    if (kind === 'line' || kind === 'message' || kind === 'richmenu' || kind === 'google') {
+      if (n1 != null && code) model[kind][code] = n1;
+      return;
+    }
+    if (kind === 'gender') {
+      if (n1 == null) return;
+      model.gender.push({ label: name || code || '未命名', value: n1 });
+      return;
+    }
+    if (kind === 'age') {
+      if (n1 == null && n2 == null) return;
+      model.age.push({ label: name || code || '未命名', male: n1 || 0, female: n2 || 0 });
+      return;
+    }
+    if (kind === 'region') {
+      if (n1 == null) return;
+      model.region.push({ label: name || code || '未命名', value: n1 });
+      return;
+    }
+    if (kind === 'month') {
+      if (n1 == null && n2 == null && n3 == null) return;
+      model.months.push({
+        label: name || code || '未命名',
+        calls: n1 || 0,
+        directions: n2 || 0,
+        website: n3 || 0
+      });
+      return;
+    }
+    if (kind === 'broadcast') {
+      if (!name && n1 == null && n2 == null && !note) return;
+      model.broadcasts.push({
+        title: name || '未命名群發',
+        sent: n1,
+        opened: n2,
+        note: note
+      });
+    }
+  });
+  return model;
+}
+
+function readFile(file) {
+  if (typeof XLSX === 'undefined') {
+    setStatus(readStore(), '讀取元件還沒載入。請確認網路後重新整理再上傳。');
+    return;
+  }
+  const reader = new FileReader();
+  reader.onload = () => {
+    try {
+      const data = new Uint8Array(reader.result);
+      const book = XLSX.read(data, { type: 'array' });
+      const sheetName = book.SheetNames.includes('資料') ? '資料' : book.SheetNames[0];
+      const sheet = book.Sheets[sheetName];
+      const rows = XLSX.utils.sheet_to_json(sheet, { header: 1, raw: false, defval: '' });
+      const model = rowsToModel(rows);
+      saveStore(model);
+      render(model);
+    } catch (err) {
+      setStatus(readStore(), err && err.message ? err.message : '無法讀取這個檔案。');
+    }
+  };
+  reader.onerror = () => setStatus(readStore(), '瀏覽器沒能讀到這個檔案。');
+  reader.readAsArrayBuffer(file);
+}
+
+function looksLikePercent(values) {
+  if (!values.length) return false;
+  const max = Math.max.apply(null, values);
+  const sum = values.reduce((total, value) => total + value, 0);
+  return max <= 100 && sum > 0 && sum <= 100.5;
+}
+
+function sumBy(list, key) {
+  return (list || []).reduce((total, item) => total + (Number(item[key]) || 0), 0);
+}
+
+function drawChart(id, config) {
+  if (typeof Chart === 'undefined') return;
+  const canvas = document.getElementById(id);
+  if (!canvas) return;
+  if (charts[id]) {
+    charts[id].destroy();
+    delete charts[id];
+  }
+  charts[id] = new Chart(canvas, config);
+}
+
+function resizeCharts() {
+  Object.values(charts).forEach(chart => {
+    try { chart.resize(); } catch (err) { /* hidden tab */ }
+  });
+}
+
+function palette(index, colors) {
+  return colors[index % colors.length];
+}
+
+function renderCharts(model) {
+  const gender = (model && model.gender) || [];
+  const age = (model && model.age) || [];
+  const region = (model && model.region) || [];
+  const months = (model && model.months) || [];
+  const broadcasts = (model && model.broadcasts) || [];
+  const base = { responsive: true, maintainAspectRatio: false };
+
+  drawChart('chartGender', {
     type: 'doughnut',
     data: {
-      labels: ['女性', '男性', '不明'],
-      datasets: [{ data: [52, 46, 2], backgroundColor: ['#ff6b8a','#5ac8fa','#e5e5ea'], borderWidth: 0 }]
+      labels: gender.map(item => item.label),
+      datasets: [{
+        data: gender.map(item => item.value),
+        backgroundColor: gender.map((item, index) => {
+          if (String(item.label).includes('女')) return '#ff6b8a';
+          if (String(item.label).includes('男')) return '#5ac8fa';
+          if (String(item.label).includes('不明')) return '#e5e5ea';
+          return palette(index, ['#ff6b8a', '#5ac8fa', '#e5e5ea', '#ff9500']);
+        }),
+        borderWidth: 0
+      }]
     },
-    options: { responsive: true, maintainAspectRatio: false, plugins: { legend: { position: 'bottom' } } }
+    options: Object.assign({}, base, { plugins: { legend: { position: 'bottom' } } })
   });
 
-  // 年齡
-  new Chart(document.getElementById('chartAge'), {
+  drawChart('chartAge', {
     type: 'bar',
     data: {
-      labels: ['0-14','20-24','30-34','40-44','50-54','60-64','70+'],
+      labels: age.map(item => item.label),
       datasets: [
-        { label: '男性', data: [0,6,6,5,5,3,2], backgroundColor: '#5ac8fa' },
-        { label: '女性', data: [1,8,7,10,9,3,1], backgroundColor: '#ff6b8a' }
+        { label: '男性', data: age.map(item => item.male), backgroundColor: '#5ac8fa' },
+        { label: '女性', data: age.map(item => item.female), backgroundColor: '#ff6b8a' }
       ]
     },
-    options: {
-      responsive: true, maintainAspectRatio: false,
+    options: Object.assign({}, base, {
       plugins: { legend: { position: 'bottom' } },
-      scales: { x: { stacked: true }, y: { stacked: true } }
-    }
+      scales: { x: { stacked: true }, y: { stacked: true, beginAtZero: true } }
+    })
   });
 
-  // 地區
-  new Chart(document.getElementById('chartRegion'), {
+  const regionValues = region.map(item => item.value);
+  const regionPct = looksLikePercent(regionValues);
+  drawChart('chartRegion', {
     type: 'bar',
     data: {
-      labels: ['高雄市','不明','屏東縣','台中市','台北市','其他'],
-      datasets: [{ data: [87.8, 8.3, 2.0, 1.8, 0.0, 0.1], backgroundColor: ['#0071e3','#8e8e93','#5ac8fa','#ff9500','#e5e5ea','#e5e5ea'] }]
+      labels: region.map(item => item.label),
+      datasets: [{
+        data: regionValues,
+        backgroundColor: region.map((_, index) => palette(index, ['#0071e3', '#8e8e93', '#5ac8fa', '#ff9500', '#c7c7cc', '#34c759']))
+      }]
     },
-    options: {
-      indexAxis: 'y', responsive: true, maintainAspectRatio: false,
+    options: Object.assign({}, base, {
+      indexAxis: 'y',
       plugins: { legend: { display: false } },
-      scales: { x: { max: 100, ticks: { callback: v => v + '%' } } }
-    }
+      scales: {
+        x: Object.assign(
+          { beginAtZero: true },
+          regionPct ? { max: 100, ticks: { callback: value => value + '%' } } : {}
+        )
+      }
+    })
   });
 
-  // Google 來電
-  new Chart(document.getElementById('chartCalls'), {
+  const callTotal = months.length ? sumBy(months, 'calls') : null;
+  const directionTotal = months.length ? sumBy(months, 'directions') : null;
+  const websiteTotal = months.length ? sumBy(months, 'website') : null;
+  setText('title-calls', callTotal == null ? '來電次數' : '來電次數（總計 ' + fmtInt(callTotal) + '）');
+  setText('title-directions', directionTotal == null ? '路線查詢' : '路線查詢（總計 ' + fmtInt(directionTotal) + '）');
+  setText('title-website', websiteTotal == null ? '網站點擊' : '網站點擊（總計 ' + fmtInt(websiteTotal) + '）');
+
+  const lineOpts = Object.assign({}, base, {
+    plugins: { legend: { display: false } },
+    scales: { y: { beginAtZero: true } }
+  });
+  const labels = months.map(item => item.label);
+  drawChart('chartCalls', {
     type: 'line',
-    data: {
-      labels: ['11月','12月','1月','2月','3月','4月'],
-      datasets: [{ label: '來電', data: [120,85,80,105,110,14], borderColor: '#0071e3', backgroundColor: 'rgba(0,113,227,0.1)', fill: true, tension: 0.4, pointRadius: 4 }]
-    },
-    options: { responsive: true, maintainAspectRatio: false, plugins: { legend: { display: false } }, scales: { y: { beginAtZero: true } } }
+    data: { labels, datasets: [{ label: '來電', data: months.map(item => item.calls), borderColor: '#0071e3', backgroundColor: 'rgba(0,113,227,0.1)', fill: true, tension: 0.4, pointRadius: 4 }] },
+    options: lineOpts
   });
-
-  // Google 路線
-  new Chart(document.getElementById('chartDirections'), {
+  drawChart('chartDirections', {
     type: 'line',
-    data: {
-      labels: ['11月','12月','1月','2月','3月','4月'],
-      datasets: [{ label: '路線查詢', data: [140,175,120,115,160,103], borderColor: '#34c759', backgroundColor: 'rgba(52,199,89,0.1)', fill: true, tension: 0.4, pointRadius: 4 }]
-    },
-    options: { responsive: true, maintainAspectRatio: false, plugins: { legend: { display: false } }, scales: { y: { beginAtZero: true } } }
+    data: { labels, datasets: [{ label: '路線查詢', data: months.map(item => item.directions), borderColor: '#34c759', backgroundColor: 'rgba(52,199,89,0.1)', fill: true, tension: 0.4, pointRadius: 4 }] },
+    options: lineOpts
   });
-
-  // Google 網站
-  new Chart(document.getElementById('chartWebsite'), {
+  drawChart('chartWebsite', {
     type: 'line',
-    data: {
-      labels: ['11月','12月','1月','2月','3月','4月'],
-      datasets: [{ label: '網站點擊', data: [38,38,25,24,43,5], borderColor: '#ff9500', backgroundColor: 'rgba(255,149,0,0.1)', fill: true, tension: 0.4, pointRadius: 4 }]
-    },
-    options: { responsive: true, maintainAspectRatio: false, plugins: { legend: { display: false } }, scales: { y: { beginAtZero: true } } }
+    data: { labels, datasets: [{ label: '網站點擊', data: months.map(item => item.website), borderColor: '#ff9500', backgroundColor: 'rgba(255,149,0,0.1)', fill: true, tension: 0.4, pointRadius: 4 }] },
+    options: lineOpts
   });
 
-  // 互動佔比
-  new Chart(document.getElementById('chartInteractionPie'), {
+  const pieSlices = months.length ? [
+    { label: '來電 ' + fmtInt(callTotal), value: callTotal, color: '#0071e3' },
+    { label: '路線查詢 ' + fmtInt(directionTotal), value: directionTotal, color: '#34c759' },
+    { label: '網站點擊 ' + fmtInt(websiteTotal), value: websiteTotal, color: '#ff9500' }
+  ].filter(slice => slice.value > 0) : [];
+  drawChart('chartInteractionPie', {
     type: 'doughnut',
     data: {
-      labels: ['路線查詢 813','來電 514','網站點擊 173'],
-      datasets: [{ data: [813, 514, 173], backgroundColor: ['#34c759','#0071e3','#ff9500'], borderWidth: 0 }]
+      labels: pieSlices.map(slice => slice.label),
+      datasets: [{ data: pieSlices.map(slice => slice.value), backgroundColor: pieSlices.map(slice => slice.color), borderWidth: 0 }]
     },
-    options: { responsive: true, maintainAspectRatio: false, plugins: { legend: { position: 'bottom' } } }
+    options: Object.assign({}, base, { plugins: { legend: { position: 'bottom' } } })
   });
 
-  // 開封率
-  new Chart(document.getElementById('chartOpenRate'), {
+  const rated = broadcasts.filter(item => item.sent && item.opened != null).map(item => ({
+    title: item.title || '未命名群發',
+    rate: (Number(item.opened) / Number(item.sent)) * 100
+  }));
+  const maxRate = rated.reduce((max, item) => Math.max(max, item.rate), 0);
+  drawChart('chartOpenRate', {
     type: 'bar',
     data: {
-      labels: ['MacBook Air M5 預購', 'iPad 小教室', '會員特典促銷'],
-      datasets: [
-        { label: '開封率 %', data: [35.4, 33.1, 17.3], backgroundColor: ['#34c759','#0071e3','#ff9500'], borderRadius: 8, borderSkipped: false }
-      ]
+      labels: rated.map(item => item.title),
+      datasets: [{
+        label: '開封率 %',
+        data: rated.map(item => Math.round(item.rate * 10) / 10),
+        backgroundColor: rated.map((_, index) => palette(index, ['#34c759', '#0071e3', '#ff9500', '#5ac8fa'])),
+        borderRadius: 8,
+        borderSkipped: false
+      }]
     },
-    options: {
-      responsive: true, maintainAspectRatio: false,
+    options: Object.assign({}, base, {
       plugins: { legend: { display: false } },
-      scales: { y: { max: 50, ticks: { callback: v => v + '%' } } }
+      scales: {
+        y: {
+          beginAtZero: true,
+          suggestedMax: maxRate ? Math.max(50, Math.ceil(maxRate * 1.25)) : 50,
+          ticks: { callback: value => value + '%' }
+        }
+      }
+    })
+  });
+
+  requestAnimationFrame(resizeCharts);
+}
+
+function renderBroadcasts(model) {
+  const box = document.getElementById('broadcast-list');
+  box.replaceChildren();
+  const list = (model && model.broadcasts) || [];
+  if (!list.length) {
+    box.append(el('div', { class: 'empty-inline' }, ['上傳後這裡會列出每一則群發的傳訊數、開封數與開封率。']));
+    setText('insight-avg', '—');
+    setText('insight-avg-note', '上傳群發後計算');
+    setText('insight-best', '—');
+    setText('insight-best-note', '上傳群發後比較');
+    return;
+  }
+  const icons = ['📣', '📱', '🎉', '✉️', '🛍️'];
+  const rated = [];
+  list.forEach((item, index) => {
+    const sent = item.sent == null ? null : Number(item.sent);
+    const opened = item.opened == null ? null : Number(item.opened);
+    const rate = sent ? (opened / sent) * 100 : null;
+    if (rate != null && Number.isFinite(rate)) rated.push({ title: item.title, rate });
+    const color = rate == null ? 'var(--sub)' : rate >= 30 ? 'var(--apple-green)' : rate >= 20 ? 'var(--apple-blue)' : 'var(--apple-orange)';
+    const row = el('div', { class: 'broadcast-item' });
+    row.append(el('div', { class: 'bc-icon' }, [icons[index % icons.length]]));
+    const main = el('div', { style: 'flex:1' });
+    main.append(el('div', { class: 'bc-title' }, [item.title || '未命名群發']));
+    if (item.note) main.append(el('div', { class: 'bc-date' }, [item.note]));
+    const stats = el('div', { class: 'bc-stats' });
+    [['傳訊', sent == null ? '—' : fmtInt(sent)], ['已開封', opened == null ? '—' : fmtInt(opened)], ['開封率', rate == null ? '—' : fmtPct(rate, 1)]].forEach((pair, pairIndex) => {
+      const stat = el('div', { class: 'bc-stat' });
+      stat.append(el('div', { class: 'bc-stat-label' }, [pair[0]]));
+      const value = el('div', { class: 'bc-stat-value' }, [pair[1]]);
+      if (pairIndex === 2) value.style.color = color;
+      stat.append(value);
+      stats.append(stat);
+    });
+    main.append(stats);
+    if (rate != null) {
+      const bar = el('div', { class: 'open-rate-bar', style: 'margin-top:8px' });
+      const fill = el('div', { class: 'open-rate-fill' });
+      fill.style.width = Math.max(0, Math.min(100, rate)) + '%';
+      fill.style.background = color;
+      bar.append(fill);
+      main.append(bar);
     }
+    if (rate != null && rate < 20) {
+      main.append(el('div', { class: 'bc-warn' }, ['開封率偏低。建議把讀者能得到的好處寫清楚。']));
+    }
+    row.append(main);
+    box.append(row);
+  });
+
+  if (!rated.length) {
+    setText('insight-avg', '—');
+    setText('insight-avg-note', '群發列需要同時有傳訊數與開封數');
+    setText('insight-best', '—');
+    setText('insight-best-note', '群發列需要同時有傳訊數與開封數');
+    return;
+  }
+  const avg = rated.reduce((total, item) => total + item.rate, 0) / rated.length;
+  const best = rated.slice().sort((a, b) => b.rate - a.rate)[0];
+  setText('insight-avg', fmtPct(avg, 1));
+  setText('insight-avg-note', '依這次上傳的 ' + rated.length + ' 則群發計算');
+  setText('insight-best', best.title);
+  setText('insight-best-note', fmtPct(best.rate, 1));
+}
+
+function recCard(rec) {
+  const card = el('div', { class: 'rec-card rec-' + rec.level });
+  const tag = el('div', { class: 'rec-tag' }, [rec.tag]);
+  const colors = { critical: 'var(--apple-red)', warning: '#8a6100', positive: '#1a7a3e', action: '#1557b0' };
+  tag.style.color = colors[rec.level] || colors.action;
+  const body = el('div', { class: 'rec-body' });
+  if (rec.bullets && rec.bullets.length) {
+    const list = el('ul');
+    rec.bullets.forEach(item => list.append(el('li', null, [item])));
+    body.append(list);
+  }
+  card.append(tag, el('div', { class: 'rec-title' }, [rec.title]), body);
+  return card;
+}
+
+function buildRecs(model) {
+  const recs = [];
+  const line = model.line || {};
+  const google = model.google || {};
+  const meta = model.meta || {};
+  const blockRate = ratio(line.blocked, line.friends_total);
+  if (blockRate != null) {
+    const high = blockRate >= 30;
+    const bullets = ['好友 ' + fmtInt(line.friends_total) + ' 人，其中封鎖 ' + fmtInt(line.blocked) + ' 人。'];
+    if (line.blocked_delta != null) bullets.push('這期封鎖人數變化 ' + fmtSigned(line.blocked_delta) + ' 人。');
+    bullets.push(high ? '封鎖率到三成以上，純促銷太密時，人會直接封鎖。' : '封鎖率還在三成以內，繼續看是哪一類訊息造成打擾。');
+    bullets.push('廣告和有用的內容混著發，也讓不想看某類訊息的人可以改選主題。');
+    recs.push({ level: high ? 'critical' : 'positive', tag: high ? '高優先' : '持續看', title: '封鎖率 ' + fmtPct(blockRate, 1), bullets });
+  }
+
+  if (google.profile_score != null) {
+    const low = google.profile_score < 80;
+    recs.push({
+      level: low ? 'critical' : 'positive',
+      tag: low ? '高優先' : '維持',
+      title: '商家檔案優異度 ' + fmtPct(google.profile_score, 0),
+      bullets: low
+        ? ['還沒到八成，搜尋時比較容易被排到後面。', '先補營業時間、服務項目、付款方式。', '固定補門市照片，舊評論也回。']
+        : ['已到八成以上。維持照片與評論回覆即可。']
+    });
+  }
+
+  const conv = ratio(google.interactions, google.views);
+  if (conv != null) {
+    const bullets = ['瀏覽 ' + fmtWan(google.views) + ' 次，互動 ' + fmtInt(google.interactions) + ' 次。'];
+    if (google.searches != null) bullets.push('搜尋曝光 ' + fmtWan(google.searches) + '。');
+    bullets.push('貼文加上致電、看路線，比較容易把瀏覽變成行動。');
+    recs.push({ level: conv < 5 ? 'warning' : 'positive', tag: conv < 5 ? '中優先' : '表現', title: '互動轉換率 ' + fmtPct(conv, 2), bullets });
+  }
+
+  const months = model.months || [];
+  if (months.length) {
+    const bullets = ['這段期間來電 ' + fmtInt(sumBy(months, 'calls')) + '、路線 ' + fmtInt(sumBy(months, 'directions')) + '、網站點擊 ' + fmtInt(sumBy(months, 'website')) + '。'];
+    if (months.length >= 2) {
+      const last = months[months.length - 1];
+      const prev = months[months.length - 2];
+      if (prev.calls > 0 && last.calls < prev.calls * 0.7) {
+        bullets.push(last.label + '來電 ' + fmtInt(last.calls) + '，比 ' + prev.label + ' 的 ' + fmtInt(prev.calls) + ' 少。可以在 LINE 推預約到店。');
+      }
+    }
+    if (sumBy(months, 'directions') > sumBy(months, 'calls')) bullets.push('查路線的人比來電多，適合給一個到店的理由。');
+    recs.push({ level: 'action', tag: 'Google 互動', title: '來電、路線、網站', bullets });
+  }
+
+  if (google.profile_views != null) {
+    if (Number(google.profile_views) === 0) {
+      recs.push({
+        level: 'warning',
+        tag: '中優先',
+        title: '商業簡介瀏覽是 0',
+        bullets: ['這段時間幾乎沒有人點進 LINE 的商家簡介。', '圖文選單加一個通往簡介的入口，並確認地址、電話、服務說明有填。']
+      });
+    } else {
+      recs.push({
+        level: 'positive',
+        tag: '簡介頁',
+        title: '商業簡介瀏覽 ' + fmtInt(google.profile_views),
+        bullets: ['有人在看門市資訊。內容保持跟現場一致。']
+      });
+    }
+  }
+
+  if (line.weekly_new != null) {
+    const bullets = [];
+    if (meta.weekly_source) bullets.push(meta.weekly_source);
+    if (line.weekly_blocked != null) bullets.push('本週封鎖 ' + fmtInt(line.weekly_blocked) + ' 人。');
+    bullets.push('若幾乎都靠店內 QR，Google 貼文、取貨、社群可以再各放一次加入方式。');
+    recs.push({ level: 'action', tag: '好友成長', title: '本週新加入 ' + fmtInt(line.weekly_new) + ' 人', bullets });
+  }
+
+  const rated = (model.broadcasts || []).filter(item => item.sent && item.opened != null).map(item => ({
+    title: item.title || '未命名群發',
+    rate: (Number(item.opened) / Number(item.sent)) * 100
+  }));
+  if (rated.length) {
+    const avg = rated.reduce((total, item) => total + item.rate, 0) / rated.length;
+    const best = rated.slice().sort((a, b) => b.rate - a.rate)[0];
+    const worst = rated.slice().sort((a, b) => a.rate - b.rate)[0];
+    const bullets = ['平均開封率 ' + fmtPct(avg, 1) + '。', '最高是「' + best.title + '」' + fmtPct(best.rate, 1) + '。'];
+    if (worst.title !== best.title) bullets.push('最低是「' + worst.title + '」' + fmtPct(worst.rate, 1) + '。');
+    bullets.push('教學、新品通常比只喊優惠好打開。促銷要寫清楚誰受惠、到什麼時候。');
+    recs.push({ level: avg < 20 ? 'warning' : 'action', tag: '內容', title: '群發開封率', bullets });
+  }
+
+  const regions = model.region || [];
+  if (regions.length) {
+    const top = regions.slice().sort((a, b) => b.value - a.value)[0];
+    const values = regions.map(item => item.value);
+    const total = values.reduce((sum, value) => sum + value, 0);
+    const shown = looksLikePercent(values) ? fmtPct(top.value, 1) : fmtPct(total ? (top.value / total) * 100 : null, 1);
+    recs.push({
+      level: 'positive',
+      tag: '在地',
+      title: top.label + ' 佔 ' + shown,
+      bullets: ['好友地區以「' + top.label + '」最高。', '貼文可以強調在地取貨、在地服務，活動也以這個範圍為主。']
+    });
+  }
+  return recs;
+}
+
+function renderRecs(model) {
+  const mount = document.getElementById('rec-mount');
+  mount.replaceChildren();
+  if (!model) {
+    mount.append(recCard({
+      level: 'action',
+      tag: '尚未載入',
+      title: '上傳資料後，這裡才會出現建議',
+      bullets: ['建議會用你上傳的數字來寫，頁面上不會先放門市實績。', '想先看版面，可以按「載入假資料示範」。']
+    }));
+    return;
+  }
+  const recs = buildRecs(model);
+  if (!recs.length) {
+    mount.append(recCard({
+      level: 'warning',
+      tag: '資料不足',
+      title: '這份檔案還沒有足夠的數字',
+      bullets: ['卡片如果是破折號，代表該欄是空的。補上後重新上傳即可。']
+    }));
+    return;
+  }
+  recs.forEach(rec => mount.append(recCard(rec)));
+}
+
+function renderMessageInsight(message, loaded) {
+  const used = message.used;
+  const quota = message.quota;
+  const remain = used != null && quota != null ? quota - used : null;
+  if (remain == null) {
+    setText('insight-remain', '—');
+    setText('insight-remain-note', loaded ? '訊息用量欄還是空的' : '上傳訊息用量後顯示');
+    return;
+  }
+  setText('insight-remain', fmtInt(remain) + ' 則');
+  setText('insight-remain-note', '已用 ' + fmtInt(used) + ' / ' + fmtInt(quota));
+}
+
+function render(model) {
+  const loaded = !!model;
+  document.body.classList.toggle('is-loaded', loaded);
+  document.body.classList.toggle('is-demo', !!(model && model.demo));
+  const meta = (model && model.meta) || {};
+  const line = (model && model.line) || {};
+  const message = (model && model.message) || {};
+  const richmenu = (model && model.richmenu) || {};
+  const google = (model && model.google) || {};
+
+  setText('report-period', '數據期間：' + (meta.period || (loaded ? '未填寫' : '尚未載入')));
+  setText('footer-asof', meta.as_of ? '數據截至 ' + meta.as_of : (loaded ? '數據截至未填寫' : '尚未載入'));
+  setText('badge-line', meta.line_badge || (loaded ? '未填區間' : '尚未載入'));
+  setText('badge-message', meta.message_badge || (loaded ? '未填區間' : '尚未載入'));
+  setText('badge-richmenu', meta.richmenu_badge || (loaded ? '未填區間' : '尚未載入'));
+  setText('badge-broadcast', meta.broadcast_badge || (loaded ? '未填區間' : '尚未載入'));
+  setText('badge-google', meta.google_badge || (loaded ? '未填區間' : '尚未載入'));
+
+  setText('val-friends-total', fmtInt(line.friends_total));
+  setText('val-friends-effective', fmtInt(line.friends_effective));
+  setText('val-blocked', fmtInt(line.blocked));
+  const blockedNode = document.getElementById('val-blocked');
+  if (blockedNode) blockedNode.style.color = line.blocked == null ? '' : 'var(--apple-red)';
+  setText('val-weekly-new', fmtInt(line.weekly_new));
+  setDelta('delta-friends', line.friends_delta, { suffix: ' vs 上期' });
+  setDelta('delta-effective', line.friends_effective_delta, {});
+  setDelta('delta-blocked', line.blocked_delta, { badUp: true, suffix: line.blocked_delta > 0 ? ' 需關注' : '' });
+
+  const eff = ratio(line.friends_effective, line.friends_total);
+  const block = ratio(line.blocked, line.friends_total);
+  setText('eff-rate', eff == null ? '—' : fmtPct(eff, 1));
+  setText('block-rate', block == null ? '—' : fmtPct(block, 1));
+  setBar('eff-bar', eff);
+  setBar('block-bar', block);
+  setText('weekly-source', meta.weekly_source || '');
+  setText('weekly-blocked-note', line.weekly_blocked == null ? '' : '封鎖 ' + fmtInt(line.weekly_blocked) + ' 人（本週）');
+
+  const msgNode = document.getElementById('val-msg');
+  if (msgNode) {
+    msgNode.replaceChildren();
+    if (message.used == null && message.quota == null) msgNode.textContent = '—';
+    else {
+      msgNode.append(document.createTextNode(fmtInt(message.used) + ' '));
+      const sub = el('span', { style: 'font-size:16px;color:var(--sub)' }, ['/ ' + fmtInt(message.quota)]);
+      msgNode.append(sub);
+    }
+  }
+  const msgRate = ratio(message.used, message.quota);
+  setText('msg-rate', msgRate == null ? '—' : fmtPct(msgRate, 1));
+  setBar('msg-bar', msgRate);
+  const remain = message.used != null && message.quota != null ? message.quota - message.used : null;
+  const foot = [];
+  if (remain != null) foot.push('剩餘 ' + fmtInt(remain) + ' 則');
+  if (message.days_left != null) foot.push('約 ' + fmtInt(message.days_left) + ' 天可用完（依目前發送量）');
+  setText('msg-foot', foot.join(' ｜ '));
+
+  const addonNode = document.getElementById('val-addon');
+  if (message.addon_used == null && message.addon_quota == null) {
+    if (addonNode) addonNode.textContent = '—';
+    setText('addon-note', loaded ? '加購欄還沒填。' : '上傳後顯示是否有加購。');
+  } else {
+    if (addonNode) {
+      addonNode.replaceChildren();
+      addonNode.append(document.createTextNode(fmtInt(message.addon_used) + ' '));
+      addonNode.append(el('span', { style: 'font-size:16px;color:var(--sub)' }, ['/ ' + fmtInt(message.addon_quota)]));
+    }
+    const unused = Number(message.addon_used || 0) === 0 && Number(message.addon_quota || 0) === 0;
+    setText('addon-note', unused ? '目前未使用加購方案。若好友數持續成長，再評估要不要升級訊息方案。' : '這是加購方案的已用與額度。');
+  }
+
+  setText('val-rm-impr', fmtInt(richmenu.impressions));
+  setText('val-rm-clicks', fmtInt(richmenu.clicks));
+  const ctr = ratio(richmenu.clicks, richmenu.impressions);
+  const ctrNode = document.getElementById('val-rm-ctr');
+  if (ctrNode) {
+    ctrNode.textContent = ctr == null ? '—' : fmtPct(ctr, 1);
+    ctrNode.style.color = ctr == null ? '' : 'var(--apple-blue)';
+  }
+  setText('richmenu-note', meta.richmenu_note || '');
+
+  const score = google.profile_score;
+  const arc = document.getElementById('score-arc');
+  const radius = 34;
+  const circ = 2 * Math.PI * radius;
+  if (arc) {
+    arc.setAttribute('stroke-dasharray', circ.toFixed(2));
+    const clamped = score == null ? 0 : Math.max(0, Math.min(100, Number(score)));
+    arc.setAttribute('stroke-dashoffset', (circ * (1 - clamped / 100)).toFixed(2));
+  }
+  setText('score-text', score == null ? '—' : Math.round(Number(score)) + '%');
+  const hint = document.getElementById('score-hint');
+  if (hint) {
+    if (score == null) {
+      hint.textContent = loaded ? '未填寫' : '上傳後顯示';
+      hint.style.color = 'var(--sub)';
+    } else if (Number(score) >= 80) {
+      hint.textContent = '維持即可';
+      hint.style.color = 'var(--apple-green)';
+    } else {
+      hint.textContent = '仍有提升空間';
+      hint.style.color = 'var(--apple-orange)';
+    }
+  }
+  setText('val-views', fmtWan(google.views));
+  setText('val-interactions', fmtInt(google.interactions));
+  setText('val-searches', fmtWan(google.searches));
+  setText('val-conversion', fmtPct(ratio(google.interactions, google.views), 2));
+
+  renderBroadcasts(model);
+  renderMessageInsight(message, loaded);
+  renderRecs(model);
+  renderCharts(model);
+  setStatus(model, '');
+}
+
+function setStatus(model, error) {
+  const sub = document.getElementById('data-status-sub');
+  if (error) {
+    setText('data-status', '檔案沒讀成');
+    setText('data-status-sub', error);
+    return;
+  }
+  if (!model) {
+    setText('data-status', '尚未載入資料');
+    setText('data-status-sub', '請下載空白範本，用 Excel 填好後上傳。數字只存在這台瀏覽器，不會送到伺服器。換一台電腦要重新上傳。');
+    return;
+  }
+  if (model.demo) {
+    setText('data-status', '目前是假資料示範');
+    setText('data-status-sub', '下面的數字是假的，用來預覽版面，不是門市實績。要換成真實資料請上傳檔案；要清掉請按清除資料。');
+    return;
+  }
+  setText('data-status', '已載入這台瀏覽器裡的資料');
+  setText('data-status-sub', '檔案沒有上傳到伺服器。按清除資料，或換瀏覽器之後，要再傳一次。');
+}
+
+function switchTab(id, btn) {
+  document.querySelectorAll('.tab-content').forEach(node => node.classList.remove('active'));
+  document.querySelectorAll('.tab-btn').forEach(node => node.classList.remove('active'));
+  const tab = document.getElementById('tab-' + id);
+  if (tab) tab.classList.add('active');
+  if (btn) btn.classList.add('active');
+  requestAnimationFrame(resizeCharts);
+}
+
+function bindUi() {
+  document.getElementById('btn-template').addEventListener('click', downloadTemplate);
+  document.getElementById('file-input').addEventListener('change', event => {
+    const file = event.target.files && event.target.files[0];
+    event.target.value = '';
+    if (file) readFile(file);
+  });
+  document.getElementById('btn-demo').addEventListener('click', () => {
+    const copy = JSON.parse(JSON.stringify(DEMO));
+    saveStore(copy);
+    render(copy);
+  });
+  document.getElementById('btn-clear').addEventListener('click', () => {
+    if (!localStorage.getItem(STORAGE_KEY)) {
+      render(null);
+      return;
+    }
+    if (!confirm('清除這台瀏覽器裡的儀表板資料？已經下載的檔案不會被刪掉。')) return;
+    localStorage.removeItem(STORAGE_KEY);
+    render(null);
+  });
+  document.querySelectorAll('.tab-btn').forEach(btn => {
+    btn.addEventListener('click', () => switchTab(btn.dataset.tab, btn));
   });
 }
 
-// 頁面載入時初始化 LINE@ tab 的圖表
-window.addEventListener('load', initCharts);
+document.addEventListener('DOMContentLoaded', () => {
+  bindUi();
+  if (typeof Chart !== 'undefined') {
+    Chart.defaults.font.family = "-apple-system, BlinkMacSystemFont, 'SF Pro Display', sans-serif";
+  }
+  render(readStore());
+});
 </script>
 </body>
 </html>
